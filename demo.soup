@@ -1,0 +1,42 @@
+{
+    "name": "Soupbuild Demo",
+    "source": "Demo/src",
+    "source-ignore": ["excluded_code"],
+    "assets": "Demo/assets",
+    "assets-ignore": ["excluded_assets"],
+    "output": "soupbuild/outputs",
+    "work": "soupbuild/work",
+    "default-platform": "Android",
+    "default-mode": "Debug",
+    "default-task": "build",
+    "modes": {
+        "Debug": {
+            "defines": ["SOUPBUILD_DEBUG"]
+        },
+        "Release": {
+        }
+    },
+    "platforms": {
+        "Android": {
+            "template": {
+                "project": "Templates/Android",
+                "source": "app/jni/src",
+                "assets": "app/src/main/assets/assets"
+            },
+            "tasks": {
+                "build": [
+                    "gradlew assemble{mode}",
+                    "cp \"app/release/app-release.apk\" \"{root}/{output}/{platform}/{mode}/{name}.apk\""
+                ],
+                "build-bundle": [
+                    "gradlew bundle{mode}",
+                    "cp \"app/release/app-release.aab\" \"{root}/{output}/{platform}/{mode}/{name}.aab\""
+                ],
+                "clean": [
+                    "gradlew clean"
+                ]
+            },
+            "defines": ["SOUPBUILD_ANDROID"]
+        }
+    }
+}

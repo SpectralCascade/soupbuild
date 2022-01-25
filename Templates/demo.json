@@ -1,0 +1,78 @@
+{
+    // Name of the app
+    "name": "Soupbuild Demo",
+    
+    // Path to native source code root directory
+    "source": "src",
+    
+    // Paths and subdirectories that shouldn't be included with source code
+    "source-ignore": ["excluded_code"],
+    
+    // Path to assets root directory
+    "assets": "assets",
+    
+    // Paths and subdirectories that shouldn't be included with source code
+    "assets-ignore": ["excluded_assets"],
+    
+    // The default location where built packages/executables should be placed (organised by platform and mode).
+    "output": "soupbuild-{name}/outputs",
+    
+    // The default location where intermediate build bits should be kept, such as the copied template projects.
+    "work": "soupbuild-{name}/work",
+    
+    // Build modes e.g. debug or release
+    "modes": {
+        // Custom build mode
+        "Debug": {
+            // Defines that should be applied
+            "defines": ["SOUPBUILD_DEBUG"]
+        },
+        
+        // Custom build mode
+        "Release": {
+        }
+    },
+    
+    // Platform-specific build steps
+    "platforms": {
+        // Custom platform
+        "Android": {
+            // Template project folder/files structure
+            "template": {
+                // Path to the template project files
+                "project": "Templates/Android",
+                
+                // Relative path where the source files should be inserted
+                "source": "app/jni/src",
+                
+                // Relative path where the asset files should be inserted
+                "assets": "app/src/main/assets/assets"
+            },
+
+            // Command line tasks. Working directory is the copied template project directory.
+            "tasks": {
+                // Command line steps executed in sequential order. Working directory is the copied template project directory by default.
+                // You can get the directory of this soupbuild JSON file using the formatter {root}.
+                "build": [
+                    "gradlew assemble{mode}",
+                    "cp \"app/release/app-release.apk\" \"{root}/{output}/{platform}/{mode}/{name}.apk\""
+                ],
+                
+                // Command line steps executed in sequential order. Working directory is the copied template project directory by default.
+                // You can get the directory of this soupbuild JSON file using the formatter {root}.
+                "build-bundle": [
+                    "gradlew bundle{mode}",
+                    "cp \"app/release/app-release.aab\" \"{root}/{output}/{platform}/{mode}/{name}.aab\""
+                ],
+                
+                // Command line tasks for cleaning, executed in sequential order. Working directory is the copied template project directory.
+                "clean": [
+                    "gradlew clean"
+                ]
+            }
+            
+            // Defines that should be applied
+            "defines": ["SOUPBUILD_ANDROID"]
+        }
+    }
+}
