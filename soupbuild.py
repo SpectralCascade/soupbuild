@@ -4,6 +4,7 @@ import sys
 import os
 import time
 import json
+import shutil
 
 MAJOR_VERSION = 1
 MINOR_VERSION = 0
@@ -57,6 +58,7 @@ if __name__ == "__main__":
     # Get command flags
     quiet = "--quiet" in sys.argv
     task_only = "--task-only" in sys.argv
+    init = "--init" in sys.argv
     
     if (not quiet):
         version_str = str(MAJOR_VERSION) + "." + str(MINOR_VERSION)
@@ -77,6 +79,14 @@ if __name__ == "__main__":
     if (config == None):
         log("Failed to find configuration file in CWD \"" + cwd + "\", aborting soupbuild.")
         sys.exit(-1)
+    
+    # Remove pre-existing work directory tree
+    if (init and os.path.exists(config["work"])):
+        try:
+            shutil.rmtree(config["work"])
+        except:
+            log("Unknown ERROR occurred while initialising work directory")
+            sys.exit(-1)
     
     argi = 1
     
