@@ -7,7 +7,9 @@ Requires Python version 3.8 or newer. Developed primarily for Windows but could 
 1. Setup a build configuration file (JSON with .soup file extension).
 2. Run soupbuild.py from the directory containing the build configuration file:
 
-`python3 soupbuild.py [options] [platform] <task-name> [mode]`
+`python3 soupbuild.py [options] [platform] [task-name] [mode]`
+
+Running the script without any arguments runs the default task set in the build configuration file.
 
 ## Build configuration file (.soup)
 The build configuration file defines how soupbuild will perform tasks for different platforms and modes.
