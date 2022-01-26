@@ -25,6 +25,7 @@
             },
             "tasks": {
                 "build": [
+                    "{run_task} Android clean {mode}",
                     "gradlew assemble{mode}",
                     "copy \"app/release/app-release.apk\" \"{root}/{output}/{platform}/{mode}/{name}.apk\""
                 ],
