@@ -1,9 +1,11 @@
 {
     "name": "Soupbuild Demo",
-    "source": "Demo/src",
-    "source-ignore": ["excluded_code"],
-    "assets": "Demo/assets",
-    "assets-ignore": ["excluded_assets"],
+    "source": "src",
+    "source-ext": [".cpp", ".c"],
+    "header-ext": [".h"],
+    "source-ignore": [],
+    "assets": "assets",
+    "assets-ignore": [],
     "output": "soupbuild/outputs",
     "work": "soupbuild/work",
     "default-platform": "Android",
@@ -18,10 +20,30 @@
     },
     "platforms": {
         "Android": {
+            "source-ignore": ["src/windows"],
+            "assets-ignore": ["assets/windows"],
             "template": {
                 "project": "Templates/Android",
                 "source": "app/jni/src",
-                "assets": "app/src/main/assets/assets"
+                "assets": "app/src/main/assets/assets",
+                "generate": {
+                    "soup_app_name": {
+                        "paths": ["app/src/main/res/values/strings.xml"],
+                        "value": "{name}"
+                    },
+                    "soup_source_paths": {
+                        "all_source_files_separator": " ",
+                        "all_source_files_format": "\"{source_file}\"",
+                        "paths": ["app/jni/src/Android.mk"],
+                        "value": "{all_source_files}"
+                    },
+                    "soup_header_paths": {
+                        "all_header_files_separator": " ",
+                        "all_header_files_format": "\"{header_file}\"",
+                        "paths": ["app/jni/Android.mk"],
+                        "value": "{all_header_files}"
+                    }
+                }
             },
             "tasks": {
                 "build": [

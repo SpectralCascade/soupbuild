@@ -2,6 +2,7 @@
 
 import sys
 import os
+import re
 import time
 import json
 import shutil
@@ -12,23 +13,26 @@ MINOR_VERSION = 0
 quiet = False
 start_time = 0
 
+# Log a message to the console if not running with the --quiet flag
 def log(message):
     if (not quiet):
         log_always(message)
-    
+
+# Always log no matter what
 def log_always(message):
     print(("[{:.3f}] ".format(time.time() - start_time)) + message)
 
+# Applies task level formatting to strings
 def format_vars(data, config, mode, platform, root):
-    data = data.format(
-        name=config["name"],
-        output=config["output"],
-        mode=mode, platform=platform,
-        root=root,
-        run_task=("python3 " + os.path.join(root, "soupbuild.py") + " --quiet --task-only ")
-    )
+    data = re.sub("\{name\}", re.escape(config["name"]), data)
+    data = re.sub("\{output\}", re.escape(config["output"]), data)
+    data = re.sub("\{mode\}", re.escape(mode), data)
+    data = re.sub("\{platform\}", re.escape(platform), data)
+    data = re.sub("\{root\}", re.escape(root), data)
+    data = re.sub("\{run_task\}", re.escape("python3 " + os.path.join(root, "soupbuild.py") + " --quiet --task-only "), data)
     return data
 
+# Format the build configuration data with task level formatting
 def format_config(config, d, platform, mode, root):
     for k, v in d.items():
         if isinstance(v, dict):
@@ -47,6 +51,7 @@ def format_config(config, d, platform, mode, root):
             d[k] = format_vars(d[k], config, mode, platform, root)
     return d
 
+# Execute a shell command
 def execute(command):
     log("$ " + command)
     return os.system(command)
@@ -59,6 +64,8 @@ if __name__ == "__main__":
     cwd = os.getcwd()
     argc = len(sys.argv)
     argi = 1
+    source_extensions = [".cpp", ".c"]
+    header_extensions = [".h"]
     
     # Get command flags
     quiet = "--quiet" in sys.argv
@@ -73,7 +80,7 @@ if __name__ == "__main__":
         print("/ SOUPBUILDER " + version_str + " /")
         print(border + "\n")
     
-    # Version checking; shutil.rmtree() deletes junction link contents, which we don't ever want to happen.
+    # Version checking; shutil.rmtree() deletes junction link contents in older versions, which we don't ever want to happen.
     python_version_info = sys.version_info
     if (python_version_info[0] < 3 or (python_version_info[0] == 3 and python_version_info[1] < 8)):
         print("ERROR: Python version must be 3.8 or newer, current version is " + sys.version.split(' ')[0])
@@ -98,6 +105,11 @@ if __name__ == "__main__":
             log("Unknown ERROR occurred while initialising work directory")
             sys.exit(-1)
     
+    if ("source-ext" in config):
+        source_extensions = config["source-ext"].copy()
+    if ("header-ext" in config):
+        header_extensions = config["header-ext"].copy()
+    
     # Skip flags
     while (argi < argc and sys.argv[argi].startswith("--")):
         argi += 1
@@ -107,15 +119,21 @@ if __name__ == "__main__":
     if (argi < argc and sys.argv[argi] in config["platforms"]):
         platform = sys.argv[argi]
         argi += 1
+    if (platform == None or platform == ""):
+        print("Error: No platform is specified. Either specify when running this script or add \"default-platform\" field to the config file.")
+        sys.exit(-1)
     
     # Get the task
     task = config["default-task"]
     if (argi < argc and sys.argv[argi] in config["platforms"][platform]["tasks"]):
         task = sys.argv[argi]
         argi += 1
+    if (platform == None or platform == ""):
+        print("Error: No task is specified. Either specify when running this script or add \"default-task\" field to the config file.")
+        sys.exit(-1)
     
     # Get the mode
-    mode = config["default-mode"]
+    mode = config["default-mode"] if "default-mode" in config else ""
     if (argi < argc and sys.argv[argi] in config["modes"]):
         mode = sys.argv[argi]
         argi += 1
@@ -167,10 +185,57 @@ if __name__ == "__main__":
                 execute("mklink /J \"" + full_code_dest + "\" \"" + config["source"] + "\"")
             if (not os.path.exists(full_assets_dest)):
                 execute("mklink /J \"" + full_assets_dest + "\" \"" + config["assets"] + "\"")
+            
+            # Next, grab lists of the source & asset file paths
+            source_files = []
+            header_files = []
+            asset_files = []
+
+            # Excluded source file paths
+            excluded_source_files = config["source-ignore"] if "source-ignore" in config else []
+            if "source-ignore" in config["platforms"][platform]:
+                excluded_source_files = excluded_source_files + config["platforms"][platform]["source-ignore"]
+            excluded_source_files = [os.path.normpath(path) for path in excluded_source_files]
+
+            # Excluded asset file paths
+            excluded_asset_files = config["assets-ignore"] if "assets-ignore" in config else []
+            if "assets-ignore" in config["platforms"][platform]:
+                excluded_asset_files = excluded_asset_files + config["platforms"][platform]["assets-ignore"]
+            excluded_asset_files = [os.path.normpath(path) for path in excluded_asset_files]
+            
+            # Source and header files
+            for root, dirs, files in os.walk(config["source"]):
+                root = os.path.normpath(root)
+                dirs[:] = [dir for dir in dirs if os.path.join(root, dir) not in excluded_source_files]
+                for file in files:
+                    if (file in excluded_source_files):
+                        continue
+                    found_file = False
+                    for ext in source_extensions:
+                        if (file.endswith(ext)):
+                            source_files.append(os.path.join(root, file))
+                            found_file = True
+                            break
+                    if (not found_file):
+                        for ext in header_extensions:
+                            if (file.endswith(ext)):
+                                header_files.append(os.path.join(root, file))
+                                break
+            
+            # Asset files
+            for root, dirs, files in os.walk(config["assets"]):
+                root = os.path.normpath(root)
+                for file in files:
+                    if (file not in excluded_asset_files):
+                        asset_files.append(os.path.join(root, file))
+            
+            log("Found " + str(len(source_files)) + " source files.")
+            log("Found " + str(len(header_files)) + " header files.")
+            log("Found " + str(len(asset_files)) + " asset files.")
         
         # Execute the task steps in the working project directory
         log("Running task \"" + task + "\" for platform: " + platform)
-        execute("cd \"" + dest + "\"")
+        os.chdir(dest)
         steps = config["platforms"][platform]["tasks"][task]
         num_steps = len(steps)
         
@@ -182,7 +247,7 @@ if __name__ == "__main__":
                 break
         
         # Return to root directory
-        execute("cd \"" + cwd + "\"")
+        os.chdir(cwd)
         config = original_config.copy()
         
         # Show the result of the task
