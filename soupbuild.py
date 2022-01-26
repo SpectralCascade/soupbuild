@@ -54,22 +54,32 @@ def execute(command):
 # Standard execution (in directory with a .soup file):
 # python3 soupbuild.py [platform] task [mode]
 if __name__ == "__main__":
+    # Initial variables setup
     start_time = time.time()
+    cwd = os.getcwd()
+    argc = len(sys.argv)
+    argi = 1
+    
     # Get command flags
     quiet = "--quiet" in sys.argv
     task_only = "--task-only" in sys.argv
     init = "--init" in sys.argv
     
+    # Show program version
     if (not quiet):
         version_str = str(MAJOR_VERSION) + "." + str(MINOR_VERSION)
         border = "////////////////" + ("/" * len(version_str))
         print(border)
         print("/ SOUPBUILDER " + version_str + " /")
         print(border + "\n")
-
-    cwd = os.getcwd()
-    argc = len(sys.argv)
     
+    # Version checking; shutil.rmtree() deletes junction link contents, which we don't ever want to happen.
+    python_version_info = sys.version_info
+    if (python_version_info[0] < 3 or (python_version_info[0] == 3 and python_version_info[1] < 8)):
+        print("ERROR: Python version must be 3.8 or newer, current version is " + sys.version.split(' ')[0])
+        sys.exit(-1)
+    
+    # Find and load the build configuration file
     config = None
     for file in os.listdir("."):
         if (file.endswith(".soup")):
@@ -77,10 +87,10 @@ if __name__ == "__main__":
                 config = json.loads(data.read())
             break
     if (config == None):
-        log("Failed to find configuration file in CWD \"" + cwd + "\", aborting soupbuild.")
+        log("Failed to find build configuration file in current working directory \"" + cwd + "\", aborting.")
         sys.exit(-1)
     
-    # Remove pre-existing work directory tree
+    # Remove pre-existing work directory tree when initialising
     if (init and os.path.exists(config["work"])):
         try:
             shutil.rmtree(config["work"])
@@ -88,10 +98,8 @@ if __name__ == "__main__":
             log("Unknown ERROR occurred while initialising work directory")
             sys.exit(-1)
     
-    argi = 1
-    
-    # Skip options and flags
-    while (argi < argc and sys.argv[argi].startswith("-")):
+    # Skip flags
+    while (argi < argc and sys.argv[argi].startswith("--")):
         argi += 1
     
     # Get the platform target
@@ -112,8 +120,9 @@ if __name__ == "__main__":
         mode = sys.argv[argi]
         argi += 1
     
-    log("Soupbuild running with task \"" + task + "\" for platform \"" + (platform if len(platform) > 0 else "[all platforms]") + "\" in mode \"" + (mode if len(mode) > 0 else "[none]") + "\".")
-    
+    log("Running task \"" + task + "\" for platform: " + (platform if len(platform) > 0 else "[all platforms]") + " in mode \"" + (mode if len(mode) > 0 else "[none]") + "\".")
+
+    # Add target platform(s) to list
     platforms = []
     if (len(platform) == 0):
         # All platforms
@@ -122,13 +131,18 @@ if __name__ == "__main__":
     else:
         platforms.append(platform)
     
+    # Iterate over each platform and execute the task
     original_config = config.copy()
     for platform in platforms:
+        if (task not in config["platforms"][platform]["tasks"]):
+            log("Task \"" + task + "\" does not exist for platform: " + platform)
+            continue
         task_start_time = time.time()
         
-        # Format config
+        # Format config before use
         format_config(config, config, platform, mode, cwd)
-        
+
+        # Pre-task steps, must setup working project directory if not already done.
         src = config["platforms"][platform]["template"]["project"]
         dest = os.path.join(config["work"], os.path.split(config["platforms"][platform]["template"]["project"])[-1])
         if (not task_only):
@@ -154,7 +168,7 @@ if __name__ == "__main__":
             if (not os.path.exists(full_assets_dest)):
                 execute("mklink /J \"" + full_assets_dest + "\" \"" + config["assets"] + "\"")
         
-        # Finally, execute the task steps in the working project directory
+        # Execute the task steps in the working project directory
         log("Running task \"" + task + "\" for platform: " + platform)
         execute("cd \"" + dest + "\"")
         steps = config["platforms"][platform]["tasks"][task]
@@ -171,6 +185,7 @@ if __name__ == "__main__":
         execute("cd \"" + cwd + "\"")
         config = original_config.copy()
         
+        # Show the result of the task
         log_always("Task \"" + task + "\" " + ("FAILED" if failed else "SUCCEEDED") + " in " + ("{:.2f}".format(time.time() - task_start_time)) + " seconds for platform: " + platform)
         if (failed):
             print("")
