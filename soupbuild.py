@@ -12,10 +12,22 @@ MINOR_VERSION = 0
 def format_config(config, d, platform, mode, root):
     for k, v in d.items():
         if isinstance(v, dict):
-            print("Key " + k + " is a dict, recursing...")
+            #print("Key " + k + " is a dict, recursing...")
             d[k] = format_config(config, d[k], platform, mode, root)
+        elif isinstance(v, list):
+            for item in range(len(v)):
+                if isinstance(v[item], dict):
+                    #print("Key " + k + " is a list with a dict at index " + str(item) + ", recursing...")
+                    d[k][item] = format_config(config, d[k][item], platform, mode, root)
+                elif isinstance(v[item], str):
+                    #print("Formatting value of key " + k + ", list element " + str(item))
+                    d[k][item] = d[k][item].replace("{name}", config["name"])
+                    d[k][item] = d[k][item].replace("{output}", config["output"])
+                    d[k][item] = d[k][item].replace("{mode}", mode)
+                    d[k][item] = d[k][item].replace("{platform}", platform)
+                    d[k][item] = d[k][item].replace("{root}", root)
         elif isinstance(v, str):
-            print("Formatting value of key " + k)
+            #print("Formatting value of key " + k)
             d[k] = d[k].replace("{name}", config["name"])
             d[k] = d[k].replace("{output}", config["output"])
             d[k] = d[k].replace("{mode}", mode)
@@ -118,5 +130,6 @@ if __name__ == "__main__":
         
         # Return to root directory
         execute("cd \"" + cwd + "\"")
+        config = original_config.copy()
         
-        print("\n\nTask \"" + task + "\" " + ("FAILED" if failed else "COMPLETED SUCCESSFULLY") + " in " + ("{:.2f}".format(time.time() - start_time)) + " seconds for platform: " + platform)
+        print("\n\nTask \"" + task + "\" " + ("FAILED" if failed else "SUCCEEDED") + " in " + ("{:.2f}".format(time.time() - start_time)) + " seconds for platform: " + platform)
