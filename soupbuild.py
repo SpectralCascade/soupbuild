@@ -4,7 +4,6 @@ import sys
 import os
 import time
 import json
-from types import SimpleNamespace
 
 MAJOR_VERSION = 1
 MINOR_VERSION = 0
@@ -121,26 +120,29 @@ if __name__ == "__main__":
         format_config(config, config, platform, mode, cwd)
         
         src = config["platforms"][platform]["template"]["project"]
-        dest = config["work"] + "/" + os.path.split(config["platforms"][platform]["template"]["project"])[-1]
+        dest = os.path.join(config["work"], os.path.split(config["platforms"][platform]["template"]["project"])[-1])
         if (not task_only):
             # First get the template project copied to the working directory
-            log("Copying template project...")
-            execute("mkdir \"" + dest + "\"")
+            if (not os.path.exists(dest)):
+                execute("mkdir \"" + dest + "\"")
             execute("copy \"" + src + "\" \"" + dest + "\"")
             
             # Now link source code and assets - more efficient than copying.
-            log("Linking source and asset directories...")
             full_code_dest = config["platforms"][platform]["template"]["source"]
             full_assets_dest = config["platforms"][platform]["template"]["assets"]
-            code_dest = "\"" + os.path.join(dest, os.path.split(full_code_dest)[0]) + "\""
-            assets_dest = "\"" + os.path.join(dest, os.path.split(full_assets_dest)[0]) + "\""
-            full_code_dest = "\"" + os.path.join(dest, full_code_dest) + "\""
-            full_assets_dest = "\"" + os.path.join(dest, full_assets_dest) + "\""
+            code_dest = os.path.join(dest, os.path.split(full_code_dest)[0])
+            assets_dest = os.path.join(dest, os.path.split(full_assets_dest)[0])
+            full_code_dest = os.path.join(dest, full_code_dest)
+            full_assets_dest = os.path.join(dest, full_assets_dest)
             
-            execute("mkdir " + code_dest)
-            execute("mkdir " + assets_dest)
-            execute("mklink /J " + full_code_dest + " \"" + config["source"] + "\"")
-            execute("mklink /J " + full_assets_dest + " \"" + config["assets"] + "\"")
+            if (not os.path.exists(code_dest)):
+                execute("mkdir \"" + code_dest + "\"")
+            if (not os.path.exists(assets_dest)):
+                execute("mkdir \"" + assets_dest + "\"")
+            if (not os.path.exists(full_code_dest)):
+                execute("mklink /J \"" + full_code_dest + "\" \"" + config["source"] + "\"")
+            if (not os.path.exists(full_assets_dest)):
+                execute("mklink /J \"" + full_assets_dest + "\" \"" + config["assets"] + "\"")
         
         # Finally, execute the task steps in the working project directory
         log("Running task \"" + task + "\" for platform: " + platform)
