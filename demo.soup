@@ -26,11 +26,11 @@
             "tasks": {
                 "build": [
                     "gradlew assemble{mode}",
-                    "cp \"app/release/app-release.apk\" \"{root}/{output}/{platform}/{mode}/{name}.apk\""
+                    "copy \"app/release/app-release.apk\" \"{root}/{output}/{platform}/{mode}/{name}.apk\""
                 ],
                 "build-bundle": [
                     "gradlew bundle{mode}",
-                    "cp \"app/release/app-release.aab\" \"{root}/{output}/{platform}/{mode}/{name}.aab\""
+                    "copy \"app/release/app-release.aab\" \"{root}/{output}/{platform}/{mode}/{name}.aab\""
                 ],
                 "clean": [
                     "gradlew clean"
