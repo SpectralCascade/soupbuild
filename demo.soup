@@ -34,7 +34,7 @@
                     "soup_source_paths": {
                         "all_source_files_separator": " ",
                         "all_source_files_format": "\"{source_file}\"",
-                        "paths": ["app/jni/src/Android.mk"],
+                        "paths": ["app/jni/Android.mk"],
                         "value": "{all_source_files}"
                     },
                     "soup_header_paths": {

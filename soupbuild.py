@@ -157,6 +157,11 @@ if __name__ == "__main__":
             continue
         task_start_time = time.time()
         
+        all_source_files_separator = " "
+        all_source_files_formatter = "\"{source_file}\""
+        all_header_files_separator = " "
+        all_header_files_formatter = "\"{header_file}\""
+        
         # Format config before use
         format_config(config, config, platform, mode, cwd)
 
@@ -229,13 +234,58 @@ if __name__ == "__main__":
                     if (file not in excluded_asset_files):
                         asset_files.append(os.path.join(root, file))
             
-            log("Found " + str(len(source_files)) + " source files.")
-            log("Found " + str(len(header_files)) + " header files.")
+            log("Found " + str(len(source_files)) + " source file(s).")
+            log("Found " + str(len(header_files)) + " header file(s).")
+            log("Excluded " + str(len(excluded_source_files)) + " source/header path(s).")
             log("Found " + str(len(asset_files)) + " asset files.")
+            log("Excluded " + str(len(excluded_asset_files)) + " asset path(s).")
+            
+            os.chdir(dest)
+            
+            # Now generation/formatting can begin
+            loaded_files = []
+            output_paths = []
+            for formatter, data in config["platforms"][platform]["template"]["generate"].items():
+                # Create the source and header file string lists as per specified formatters
+                all_source_files_formatter = data["all_source_files_formatter"] if "all_source_files_formatter" in data else "\"{source_file}\""
+                all_header_files_formatter = data["all_header_files_formatter"] if "all_header_files_formatter" in data else "\"{header_file}\""
+                all_source_files_separator = data["all_source_files_separator"] if "all_source_files_separator" in data else " "
+                all_header_files_separator = data["all_header_files_separator"] if "all_header_files_separator" in data else " "
+                
+                all_source_files = all_source_files_separator.join([all_source_files_formatter.format(source_file=source_file) for source_file in source_files])
+                all_header_files = all_header_files_separator.join([all_header_files_formatter.format(header_file=header_file) for header_file in header_files])
+                
+                log("all_source_files: " + all_source_files)
+                log("all_header_files: " + all_header_files)
+                
+                # Load and format the files
+                for path in data["paths"]:
+                    template_path = os.path.join(cwd, config["platforms"][platform]["template"]["project"], path)
+                    if (not os.path.exists(template_path)):
+                        log("Warning: File at \"" + path + "\" does not exist. Skipping generation/formatting...")
+                        continue
+                    if (path not in output_paths):
+                        output_paths.append(path)
+                        with open(template_path, "r", encoding="utf-8") as infile:
+                            formatted = infile.read()
+                            if ("{all_source_files}" in data["value"]):
+                                data["value"] = data["value"].format(all_source_files=all_source_files)
+                            if ("{all_header_files}" in data["value"]):
+                                data["value"] = data["value"].format(all_header_files=all_header_files)
+                            formatted = formatted.replace("{" + formatter + "}", data["value"])
+                            loaded_files.append(formatted)
+                    else:
+                        index = output_paths.index(path)
+                        loaded_files[index] = re.sub("\{" + formatter + "\}", re.escape(data["value"]), loaded_files[index])
+            # Write the files back out to the working project
+            for i in range(len(output_paths)):
+                with open(output_paths[i], "w") as file:
+                    file.write(loaded_files[i])
+            os.chdir(cwd)
         
         # Execute the task steps in the working project directory
-        log("Running task \"" + task + "\" for platform: " + platform)
         os.chdir(dest)
+        log("Running task \"" + task + "\" for platform: " + platform)
         steps = config["platforms"][platform]["tasks"][task]
         num_steps = len(steps)
         
