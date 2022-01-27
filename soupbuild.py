@@ -255,9 +255,6 @@ if __name__ == "__main__":
                 all_source_files = all_source_files_separator.join([all_source_files_formatter.format(source_file=source_file) for source_file in source_files])
                 all_header_files = all_header_files_separator.join([all_header_files_formatter.format(header_file=header_file) for header_file in header_files])
                 
-                log("all_source_files: " + all_source_files)
-                log("all_header_files: " + all_header_files)
-                
                 # Load and format the files
                 for path in data["paths"]:
                     template_path = os.path.join(cwd, config["platforms"][platform]["template"]["project"], path)
