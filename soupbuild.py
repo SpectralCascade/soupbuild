@@ -12,6 +12,9 @@ MINOR_VERSION = 0
 
 quiet = False
 start_time = 0
+script_path = ""
+config_path = ""
+cwd = ""
 
 # Log a message to the console if not running with the --quiet flag
 def log(message):
@@ -24,12 +27,12 @@ def log_always(message):
 
 # Applies task level formatting to strings
 def format_vars(data, config, mode, platform, root):
-    data = re.sub("\{name\}", re.escape(config["name"]), data)
-    data = re.sub("\{output\}", re.escape(config["output"]), data)
-    data = re.sub("\{mode\}", re.escape(mode), data)
-    data = re.sub("\{platform\}", re.escape(platform), data)
-    data = re.sub("\{root\}", re.escape(root), data)
-    data = re.sub("\{run_task\}", re.escape("python3 " + os.path.join(root, "soupbuild.py") + " --quiet --task-only "), data)
+    data = data.replace("{name}", config["name"])
+    data = data.replace("{output}", config["output"])
+    data = data.replace("{mode}", mode)
+    data = data.replace("{platform}", platform)
+    data = data.replace("{root}", root)
+    data = data.replace("{work}", config["work"])
     return data
 
 # Format the build configuration data with task level formatting
@@ -52,9 +55,9 @@ def format_config(config, d, platform, mode, root):
     return d
 
 # Execute a shell command
-def execute(command):
+def execute(command, ps = False):
     log("$ " + command)
-    return os.system(command)
+    return os.system(("powershell.exe " if ps else "") + command)
 
 # Standard execution (in directory with a .soup file):
 # python3 soupbuild.py [platform] task [mode]
@@ -62,15 +65,25 @@ if __name__ == "__main__":
     # Initial variables setup
     start_time = time.time()
     cwd = os.getcwd()
+    script_path = os.path.abspath(sys.argv[0])
     argc = len(sys.argv)
     argi = 1
     source_extensions = [".cpp", ".c"]
     header_extensions = [".h"]
     
-    # Get command flags
+    # Get command flags and options
     quiet = "--quiet" in sys.argv
     task_only = "--task-only" in sys.argv
     init = "--init" in sys.argv
+    
+    config = None
+    while (argi < argc and sys.argv[argi].startswith("--")):
+        if (sys.argv[argi].startswith("--build-config=")):
+            file = sys.argv[argi][15:]
+            with open(file, 'r') as data:
+                config = json.loads(data.read())
+                config_path = os.path.abspath(file)
+        argi += 1
     
     # Show program version
     if (not quiet):
@@ -87,22 +100,23 @@ if __name__ == "__main__":
         sys.exit(-1)
     
     # Find and load the build configuration file
-    config = None
-    for file in os.listdir("."):
-        if (file.endswith(".soup")):
-            with open(file, 'r') as data:
-                config = json.loads(data.read())
-            break
     if (config == None):
-        log("Failed to find build configuration file in current working directory \"" + cwd + "\", aborting.")
-        sys.exit(-1)
+        for file in os.listdir("."):
+            if (file.endswith(".soup")):
+                with open(file, 'r') as data:
+                    config = json.loads(data.read())
+                    config_path = os.path.abspath(file)
+                break
+        if (config == None):
+            print("ERROR: Failed to find build configuration file in current working directory \"" + cwd + "\", aborting.")
+            sys.exit(-1)
     
     # Remove pre-existing work directory tree when initialising
     if (init and os.path.exists(config["work"])):
         try:
             shutil.rmtree(config["work"])
         except:
-            log("Unknown ERROR occurred while initialising work directory")
+            print("ERROR: Unknown error occurred while initialising work directory")
             sys.exit(-1)
     
     if ("source-ext" in config):
@@ -110,17 +124,13 @@ if __name__ == "__main__":
     if ("header-ext" in config):
         header_extensions = config["header-ext"].copy()
     
-    # Skip flags
-    while (argi < argc and sys.argv[argi].startswith("--")):
-        argi += 1
-    
     # Get the platform target
     platform = config["default-platform"]
     if (argi < argc and sys.argv[argi] in config["platforms"]):
         platform = sys.argv[argi]
         argi += 1
     if (platform == None or platform == ""):
-        print("Error: No platform is specified. Either specify when running this script or add \"default-platform\" field to the config file.")
+        print("ERROR: No platform is specified. Either specify when running this script or add \"default-platform\" field to the config file.")
         sys.exit(-1)
     
     # Get the task
@@ -129,7 +139,7 @@ if __name__ == "__main__":
         task = sys.argv[argi]
         argi += 1
     if (platform == None or platform == ""):
-        print("Error: No task is specified. Either specify when running this script or add \"default-task\" field to the config file.")
+        print("ERROR: No task is specified. Either specify when running this script or add \"default-task\" field to the config file.")
         sys.exit(-1)
     
     # Get the mode
@@ -169,7 +179,12 @@ if __name__ == "__main__":
         src = config["platforms"][platform]["template"]["project"]
         dest = os.path.join(config["work"], os.path.split(config["platforms"][platform]["template"]["project"])[-1])
         if (not task_only):
-            # First get the template project copied to the working directory
+            # Make sure output directory exists
+            output_dir = os.path.join(config["output"], platform, mode)
+            if (not os.path.exists(output_dir)):
+                execute("mkdir \"" + output_dir + "\"")
+            
+            # Get the template project copied to the working directory
             if (not os.path.exists(dest)):
                 execute("mkdir \"" + dest + "\"")
             execute("copy \"" + src + "\" \"" + dest + "\"")
@@ -255,6 +270,11 @@ if __name__ == "__main__":
                 all_source_files = all_source_files_separator.join([all_source_files_formatter.format(source_file=source_file) for source_file in source_files])
                 all_header_files = all_header_files_separator.join([all_header_files_formatter.format(header_file=header_file) for header_file in header_files])
                 
+                if ("{all_source_files}" in data["value"]):
+                    data["value"] = data["value"].format(all_source_files=all_source_files)
+                if ("{all_header_files}" in data["value"]):
+                    data["value"] = data["value"].format(all_header_files=all_header_files)
+                
                 # Load and format the files
                 for path in data["paths"]:
                     template_path = os.path.join(cwd, config["platforms"][platform]["template"]["project"], path)
@@ -265,15 +285,11 @@ if __name__ == "__main__":
                         output_paths.append(path)
                         with open(template_path, "r", encoding="utf-8") as infile:
                             formatted = infile.read()
-                            if ("{all_source_files}" in data["value"]):
-                                data["value"] = data["value"].format(all_source_files=all_source_files)
-                            if ("{all_header_files}" in data["value"]):
-                                data["value"] = data["value"].format(all_header_files=all_header_files)
                             formatted = formatted.replace("{" + formatter + "}", data["value"])
                             loaded_files.append(formatted)
                     else:
                         index = output_paths.index(path)
-                        loaded_files[index] = re.sub("\{" + formatter + "\}", re.escape(data["value"]), loaded_files[index])
+                        loaded_files[index] = loaded_files[index].replace("{" + formatter + "}", data["value"])
             # Write the files back out to the working project
             for i in range(len(output_paths)):
                 with open(output_paths[i], "w") as file:
@@ -281,7 +297,10 @@ if __name__ == "__main__":
             os.chdir(cwd)
         
         # Execute the task steps in the working project directory
+        print("cwd = " + os.getcwd())
         os.chdir(dest)
+        task_run_dir = os.getcwd()
+        
         log("Running task \"" + task + "\" for platform: " + platform)
         steps = config["platforms"][platform]["tasks"][task]
         num_steps = len(steps)
@@ -289,8 +308,16 @@ if __name__ == "__main__":
         failed = False
         for i in range(num_steps):
             log("Step " + str(i + 1) + " of " + str(num_steps))
-            if (execute(steps[i]) != 0):
+            run_task = "{run_task}" in steps[i]
+            if (run_task):
+                os.chdir(cwd)
+                steps[i] = steps[i].replace("{run_task}", "python3 \"" + script_path + "\" --quiet --task-only \"--build-config=" + config_path + "\"")
+            
+            if (execute(steps[i], ps=(not run_task)) != 0):
                 failed = True
+            
+            os.chdir(task_run_dir)
+            if (failed):
                 break
         
         # Return to root directory
