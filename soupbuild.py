@@ -185,9 +185,9 @@ if __name__ == "__main__":
                 execute("mkdir \"" + output_dir + "\"")
             
             # Get the template project copied to the working directory
-            if (not os.path.exists(dest)):
-                execute("mkdir \"" + dest + "\"")
-            execute("copy \"" + src + "\" \"" + dest + "\"")
+            if (os.path.exists(dest)):
+                shutil.rmtree(dest)
+            execute("cp -R \"" + src + "\" \"" + dest + "\"", ps=True)
             
             # Now link source code and assets - more efficient than copying.
             full_code_dest = config["platforms"][platform]["template"]["source"]
