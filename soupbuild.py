@@ -304,6 +304,7 @@ if __name__ == "__main__":
         num_steps = len(steps)
         
         failed = False
+        abort_on_error = config["platforms"][platform]["tasks"][task]["abort_on_error"] if "abort_on_error" in config["platforms"][platform]["tasks"][task] else True
         for i in range(num_steps):
             log("Task \"" + task + "\" step " + str(i + 1) + " of " + str(num_steps))
             run_task = "{run_task}" in steps[i]
@@ -311,12 +312,16 @@ if __name__ == "__main__":
                 os.chdir(cwd)
                 steps[i] = steps[i].replace("{run_task}", "python3 \"" + script_path + "\" --quiet --task-only \"--build-config=" + config_path + "\"")
             
+            failed_step = False
             if (execute(steps[i], ps=(not run_task)) != 0):
                 failed = True
+                failed_step = True
             
             os.chdir(task_run_dir)
-            if (failed):
-                break
+            if (failed_step):
+                log("ERROR: Failed to complete step " + str(i + 1) + " of " + str(num_steps) + " for task \"" + task + "\". " + ("Continuing as abort_on_error is set to False" if not abort_on_error else "Aborting task..."))
+                if (abort_on_error):
+                    break
         
         # Return to root directory
         os.chdir(cwd)
