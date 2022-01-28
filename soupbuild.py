@@ -297,17 +297,15 @@ if __name__ == "__main__":
             os.chdir(cwd)
         
         # Execute the task steps in the working project directory
-        print("cwd = " + os.getcwd())
         os.chdir(dest)
         task_run_dir = os.getcwd()
         
-        log("Running task \"" + task + "\" for platform: " + platform)
-        steps = config["platforms"][platform]["tasks"][task]
+        steps = config["platforms"][platform]["tasks"][task]["steps"]
         num_steps = len(steps)
         
         failed = False
         for i in range(num_steps):
-            log("Step " + str(i + 1) + " of " + str(num_steps))
+            log("Task \"" + task + "\" step " + str(i + 1) + " of " + str(num_steps))
             run_task = "{run_task}" in steps[i]
             if (run_task):
                 os.chdir(cwd)
@@ -322,10 +320,24 @@ if __name__ == "__main__":
         
         # Return to root directory
         os.chdir(cwd)
-        config = original_config.copy()
         
-        # Show the result of the task
+        # Follow the result of the task
         log_always("Task \"" + task + "\" " + ("FAILED" if failed else "SUCCEEDED") + " in " + ("{:.2f}".format(time.time() - task_start_time)) + " seconds for platform: " + platform)
         if (failed):
             print("")
             sys.exit(-1)
+        else:
+            # Copy specified output files to outputs directory on task completion
+            if ("outputs" in config["platforms"][platform]["tasks"][task]):
+                for path in config["platforms"][platform]["tasks"][task]["outputs"]:
+                    src_path = os.path.join(root, dest, path)
+                    dest_path = os.path.join(root, config["output"], platform, mode, os.path.split(path)[-1])
+                    # Delete pre-existing files before copying new outputs
+                    if (os.path.exists(dest_path)):
+                        shutil.rmtree(dest_path)
+                    if (os.path.exists(src_path)):
+                        execute("cp \"" + src_path + "\" \"" + dest_path + "\"", ps=True)
+                    else:
+                        log("Warning: specified output path \"" + src_path + "\" does not exist, failed to copy.")
+        
+        config = original_config.copy()
