@@ -330,13 +330,16 @@ if __name__ == "__main__":
             # Copy specified output files to outputs directory on task completion
             if ("outputs" in config["platforms"][platform]["tasks"][task]):
                 for path in config["platforms"][platform]["tasks"][task]["outputs"]:
-                    src_path = os.path.join(root, dest, path)
-                    dest_path = os.path.join(root, config["output"], platform, mode, os.path.split(path)[-1])
+                    src_path = os.path.normpath(os.path.join(cwd, dest, path))
+                    dest_path = os.path.normpath(os.path.join(cwd, config["output"], platform, mode, os.path.split(path)[-1]))
                     # Delete pre-existing files before copying new outputs
                     if (os.path.exists(dest_path)):
-                        shutil.rmtree(dest_path)
+                        if (os.path.isfile(dest_path)):
+                            os.remove(dest_path)
+                        else:
+                            shutil.rmtree(dest_path)
                     if (os.path.exists(src_path)):
-                        execute("cp \"" + src_path + "\" \"" + dest_path + "\"", ps=True)
+                        execute("cp -R \"" + src_path + "\" \"" + dest_path + "\"", ps=True)
                     else:
                         log("Warning: specified output path \"" + src_path + "\" does not exist, failed to copy.")
         
