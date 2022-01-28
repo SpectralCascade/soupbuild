@@ -185,7 +185,7 @@ if __name__ == "__main__":
                 execute("mkdir \"" + output_dir + "\"")
             
             # Get the template project copied to the working directory
-            execute("cp -R \"" + src + "\" \"" + dest + "\"", ps=True)
+            execute("cp -R -Force \"" + src + "\" \"" + dest + "\"", ps=True)
             
             # Now link source code and assets - more efficient than copying.
             full_code_dest = config["platforms"][platform]["template"]["source"]
