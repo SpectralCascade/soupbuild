@@ -183,9 +183,10 @@ if __name__ == "__main__":
             output_dir = os.path.join(config["output"], platform, mode)
             if (not os.path.exists(output_dir)):
                 execute("mkdir \"" + output_dir + "\"")
-            
-            # Get the template project copied to the working directory
-            execute("cp -R -Force \"" + src + "\" \"" + dest + "\"", ps=True)
+                execute("cp -R -Force \"" + src + "\" \"" + dest + "\"", ps=True)
+            else:
+                # Get the template project copied to the working directory
+                execute("cp -R -Force \"" + src + "\" \"" + os.path.split(dest)[0] + "\"", ps=True)
             
             # Now link source code and assets - more efficient than copying.
             full_code_dest = config["platforms"][platform]["template"]["source"]
