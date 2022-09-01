@@ -160,10 +160,11 @@ if __name__ == "__main__":
             print("ERROR: Failed to find build configuration file in current working directory \"" + cwd + "\", aborting.")
             sys.exit(-1)
     
-    # Remove pre-existing work directory tree when initialising
+    # Remove pre-existing work and output directory trees when initialising
     if (init and os.path.exists(config["work"])):
         try:
             shutil.rmtree(config["work"])
+            shutil.rmtree(config["output"])
         except:
             print("ERROR: Unknown error occurred while initialising work directory")
             sys.exit(-1)
@@ -222,11 +223,15 @@ if __name__ == "__main__":
         all_header_files_separator = " "
         all_header_files_formatter = "\"{header_file}\""
         
+        all_includes_separator = " "
+        all_includes_formatter = "\"{include_dir}\""
+        
         # Format config before use
         format_config(config, config, platform, mode, cwd)
         
-        # Keep an easily accessible list of dependency keys
+        # Keep an easily accessible list of dependency keys and versions
         deps = []
+        dep_versions = []
         
         # Pre-task steps, must setup working project directory if not already done.
         src = config["platforms"][platform]["template"]["project"]
@@ -237,10 +242,11 @@ if __name__ == "__main__":
             if "dependencies" in config["platforms"][platform]:
                 for key, dep in config["platforms"][platform]["dependencies"].items():
                     deps.append(key)
+                    version = ""
+                    if "version" in dep:
+                        version = dep["version"]
+                    dep_versions.append(version)
                     if not skip_deps:
-                        version = ""
-                        if "version" in dep:
-                            version = dep["version"]
                         # Shared library prioritised over building from source
                         if "shared" in dep:
                             # Download and extract shared library if necessary
@@ -279,10 +285,12 @@ if __name__ == "__main__":
             if (not os.path.exists(full_assets_dest)):
                 execute("mklink /J \"" + full_assets_dest + "\" \"" + config["assets"] + "\"")
             
-            # Next, grab lists of the source & asset file paths
+            # Next, grab lists of the source & asset file paths as well as dependency paths
             source_files = []
             header_files = []
             asset_files = []
+            include_paths = []
+            lib_paths = []
 
             # Excluded source file paths
             excluded_source_files = config["source-ignore"] if "source-ignore" in config else []
@@ -328,25 +336,42 @@ if __name__ == "__main__":
             log("Found " + str(len(asset_files)) + " asset files.")
             log("Excluded " + str(len(excluded_asset_files)) + " asset path(s).")
             
+            # Include and library linking paths
+            for dep_index in range(len(deps)):
+                key = deps[dep_index]
+                v = dep_versions[dep_index]
+                source_path = os.path.join(app_data, "source", key + ("-" + v if v else ""))
+                if "includes" in config["platforms"][platform]["dependencies"][key]:
+                    for i in range(len(config["platforms"][platform]["dependencies"][key]["includes"])):
+                        config["platforms"][platform]["dependencies"][key]["includes"][i] = os.path.join(source_path, config["platforms"][platform]["dependencies"][key]["includes"][i].format(version=v)).replace(os.sep, '/')
+                    include_paths = include_paths + config["platforms"][platform]["dependencies"][key]["includes"]
+                if "libs" in config["platforms"][platform]["dependencies"][key]:
+                    for i in range(len(config["platforms"][platform]["dependencies"][key]["libs"])):
+                        config["platforms"][platform]["dependencies"][key]["libs"][i] = os.path.join(source_path, config["platforms"][platform]["dependencies"][key]["libs"][i].format(version=v)).replace(os.sep, '/')
+                    lib_paths = lib_paths + config["platforms"][platform]["dependencies"][key]["libs"]
+            
             os.chdir(dest)
             
             # Now generation/formatting can begin
             loaded_files = []
             output_paths = []
             for formatter, data in config["platforms"][platform]["template"]["generate"].items():
-                # Create the source and header file string lists as per specified formatters
-                all_source_files_formatter = data["all_source_files_formatter"] if "all_source_files_formatter" in data else "\"{source_file}\""
-                all_header_files_formatter = data["all_header_files_formatter"] if "all_header_files_formatter" in data else "\"{header_file}\""
-                all_source_files_separator = data["all_source_files_separator"] if "all_source_files_separator" in data else " "
-                all_header_files_separator = data["all_header_files_separator"] if "all_header_files_separator" in data else " "
-                
-                all_source_files = all_source_files_separator.join([all_source_files_formatter.format(source_file=source_file) for source_file in source_files])
-                all_header_files = all_header_files_separator.join([all_header_files_formatter.format(header_file=header_file) for header_file in header_files])
+                # Create the string lists as per specified formatters
+                item_formatter = data["formatter"] if "formatter" in data else "\"{item}\""
+                item_separator = data["separator"] if "separator" in data else " "
                 
                 if ("{all_source_files}" in data["value"]):
+                    all_source_files = item_separator.join([item_formatter.format(item=source_file) for source_file in source_files])
                     data["value"] = data["value"].format(all_source_files=all_source_files)
-                if ("{all_header_files}" in data["value"]):
+                elif ("{all_header_files}" in data["value"]):
+                    all_header_files = item_separator.join([item_formatter.format(item=header_file) for header_file in header_files])
                     data["value"] = data["value"].format(all_header_files=all_header_files)
+                elif ("{all_include_paths}" in data["value"]):
+                    all_include_paths = item_separator.join([item_formatter.format(item=include_path) for include_path in include_paths])
+                    data["value"] = data["value"].format(all_include_paths=all_include_paths)
+                elif ("{all_lib_paths}" in data["value"]):
+                    all_lib_paths = item_separator.join([item_formatter.format(item=lib_path) for lib_path in lib_paths])
+                    data["value"] = data["value"].format(all_lib_paths=all_lib_paths)
                 
                 # Load and format the files
                 for path in data["paths"]:
