@@ -9,12 +9,14 @@ import shutil
 
 MAJOR_VERSION = 1
 MINOR_VERSION = 0
+APP_NAME = "Soupbuild"
 
 quiet = False
 start_time = 0
 script_path = ""
 config_path = ""
 cwd = ""
+app_data = ""
 
 # Log a message to the console if not running with the --quiet flag
 def log(message):
@@ -25,6 +27,14 @@ def log(message):
 def log_always(message):
     print(("[{:.3f}] ".format(time.time() - start_time)) + message)
 
+def GetAppDataPath():
+    if sys.platform == 'win32':
+        return os.path.join(os.environ['LOCALAPPDATA'], APP_NAME)
+    elif sys.platform == 'darwin':
+        from AppKit import NSSearchPathForDirectoriesInDomains
+        return os.path.join(NSSearchPathForDirectoriesInDomains(14, 1, True)[0], APP_NAME)
+    return os.path.expanduser(os.path.join("~", "." + APP_NAME))
+
 # Applies task level formatting to strings
 def format_vars(data, config, mode, platform, root):
     data = data.replace("{name}", config["name"])
@@ -33,6 +43,7 @@ def format_vars(data, config, mode, platform, root):
     data = data.replace("{platform}", platform)
     data = data.replace("{root}", root)
     data = data.replace("{work}", config["work"])
+    data = data.replace("{app_data}", app_data)
     return data
 
 # Format the build configuration data with task level formatting
@@ -59,6 +70,34 @@ def execute(command, ps = False):
     log("$ " + command)
     return os.system(("powershell.exe " if ps else "") + command)
 
+# URL retrieval progress callback
+def handle_download(block_count, block_size, total_size):
+    log("Downloaded " + str(block_size * block_count) + " / " + (str(total_size) if total_size >= 0 else "unknown total") + " bytes...")
+
+# Downloads an archive and extracts it to a folder
+def retrieve_archive(url, name, root=".", v=""):
+    if not os.path.exists(root):
+        execute("mkdir \"" + root + "\"")
+    os.chdir(root)
+    url = url.format(version=v)
+    tarball = url.endswith(".tar.gz")
+    ext = (".tar.gz" if tarball else ".zip")
+    extracted = name + ("-" + v if v else "")
+    if not os.path.exists(extracted):
+        execute("mkdir \"" + extracted + "\"")
+    os.chdir(extracted)
+    log("Attempting to download archive from URL " + url)
+    try:
+        # Note: this urlretrieve function may get deprecated in future python versions
+        urllib.request.urlretrieve(url, "archive" + ext, handle_download)
+        log("Download successful, extracting to \"" + extracted + "\"")
+        execute("tar -x" + ("vz" if tarball else "") + "f archive" + ext)
+        os.remove("archive" + ext)
+    except Exception as e:
+        log("ERROR: Failed to download and extract archive due to exception: " + str(e))
+        return False
+    return True
+
 # Standard execution (in directory with a .soup file):
 # python3 soupbuild.py [platform] task [mode]
 if __name__ == "__main__":
@@ -70,11 +109,15 @@ if __name__ == "__main__":
     argi = 1
     source_extensions = [".cpp", ".c"]
     header_extensions = [".h"]
+    app_data = GetAppDataPath()
+    if not os.path.exists(app_data):
+        execute("mkdir \"" + app_data + "\"")
     
     # Get command flags and options
     quiet = "--quiet" in sys.argv
     task_only = "--task-only" in sys.argv
     init = "--init" in sys.argv
+    skip_deps = "--skip-deps" in sys.argv
     
     config = None
     while (argi < argc and sys.argv[argi].startswith("--")):
@@ -99,6 +142,9 @@ if __name__ == "__main__":
         print("ERROR: Python version must be 3.8 or newer, current version is " + sys.version.split(' ')[0])
         sys.exit(-1)
     
+    # Import python3 libraries
+    import urllib.request
+    
     # Find and load the build configuration file
     if (config == None):
         for file in os.listdir("."):
@@ -119,6 +165,7 @@ if __name__ == "__main__":
             print("ERROR: Unknown error occurred while initialising work directory")
             sys.exit(-1)
     
+    # Setup other config variables
     if ("source-ext" in config):
         source_extensions = config["source-ext"].copy()
     if ("header-ext" in config):
@@ -154,7 +201,7 @@ if __name__ == "__main__":
     platforms = []
     if (len(platform) == 0):
         # All platforms
-        for key, value in config["platforms"]:
+        for key, value in config["platforms"].items():
             platforms.append(key)
     else:
         platforms.append(platform)
@@ -174,18 +221,42 @@ if __name__ == "__main__":
         
         # Format config before use
         format_config(config, config, platform, mode, cwd)
-
+        
+        # Keep an easily accessible list of dependency keys
+        deps = []
+        
         # Pre-task steps, must setup working project directory if not already done.
         src = config["platforms"][platform]["template"]["project"]
         dest = os.path.join(config["work"], os.path.split(config["platforms"][platform]["template"]["project"])[-1])
         if (not task_only):
+            # Automagically download & setup dependencies
+            os.chdir(app_data)
+            if "dependencies" in config["platforms"][platform]:
+                for key, dep in config["platforms"][platform]["dependencies"].items():
+                    deps.append(key)
+                    if not skip_deps:
+                        version = ""
+                        if "version" in dep:
+                            version = dep["version"]
+                        # Shared library prioritised over building from source
+                        if "shared" in dep:
+                            # Download and extract shared library
+                            if not retrieve_archive(dep["shared"], key, "shared", version):
+                                sys.exit(-1)
+                            os.chdir(app_data)
+                        if "source" in dep:
+                            # Download and extract library source code
+                            if not retrieve_archive(dep["source"], key, "source", version):
+                                sys.exit(-1)
+                            os.chdir(app_data)
+            os.chdir(cwd)
+            
             # Make sure output directory exists
             output_dir = os.path.join(config["output"], platform, mode)
             if (not os.path.exists(output_dir)):
                 execute("mkdir \"" + output_dir + "\"")
                 execute("cp -R -Force \"" + src + "\" \"" + dest + "\"", ps=True)
             else:
-                # Get the template project copied to the working directory
                 execute("cp -R -Force \"" + src + "\" \"" + os.path.split(dest)[0] + "\"", ps=True)
             
             # Now link source code and assets - more efficient than copying.
@@ -346,5 +417,21 @@ if __name__ == "__main__":
                         execute("cp -R \"" + src_path + "\" \"" + dest_path + "\"", ps=True)
                     else:
                         log("Warning: specified output path \"" + src_path + "\" does not exist, failed to copy.")
+            
+            # Also be sure to copy shared libraries to the outputs directory
+            os.chdir(app_data)
+            if not os.path.exists("shared"):
+                execute("mkdir \"shared\"")
+            os.chdir("shared")
+            for key in deps:
+                version = ""
+                if "version" in config["platforms"][platform]["dependencies"][key]:
+                    version = config["platforms"][platform]["dependencies"][key]["version"]
+                dep_name = key + ("-" + version if version else "")
+                dest_path = os.path.normpath(os.path.join(cwd, config["output"], platform, mode))
+                for root, dirs, files in os.walk(dep_name):
+                    for file in files:
+                        if not file.endswith(".txt"):
+                            execute("cp \"" + os.path.join(root, file) + "\" \"" + dest_path + "\"", ps=True)
         
         config = original_config.copy()
