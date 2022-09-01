@@ -75,7 +75,7 @@ def handle_download(block_count, block_size, total_size):
     log("Downloaded " + str(block_size * block_count) + " / " + (str(total_size) if total_size >= 0 else "unknown total") + " bytes...")
 
 # Downloads an archive and extracts it to a folder
-def retrieve_archive(url, name, root=".", v=""):
+def retrieve_archive(url, name, root=".", v="", force=False):
     if not os.path.exists(root):
         execute("mkdir \"" + root + "\"")
     os.chdir(root)
@@ -85,6 +85,9 @@ def retrieve_archive(url, name, root=".", v=""):
     extracted = name + ("-" + v if v else "")
     if not os.path.exists(extracted):
         execute("mkdir \"" + extracted + "\"")
+    elif not force:
+        log("Already downloaded version " + v + " of dependency " + name + " from " + url)
+        return True
     os.chdir(extracted)
     log("Attempting to download archive from URL " + url)
     try:
@@ -240,12 +243,12 @@ if __name__ == "__main__":
                             version = dep["version"]
                         # Shared library prioritised over building from source
                         if "shared" in dep:
-                            # Download and extract shared library
+                            # Download and extract shared library if necessary
                             if not retrieve_archive(dep["shared"], key, "shared", version):
                                 sys.exit(-1)
                             os.chdir(app_data)
                         if "source" in dep:
-                            # Download and extract library source code
+                            # Download and extract library source code if necessary
                             if not retrieve_archive(dep["source"], key, "source", version):
                                 sys.exit(-1)
                             os.chdir(app_data)
