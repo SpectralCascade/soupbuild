@@ -229,10 +229,6 @@ if __name__ == "__main__":
         # Format config before use
         format_config(config, config, platform, mode, cwd)
         
-        # Keep an easily accessible list of dependency keys and versions
-        deps = []
-        dep_versions = []
-        
         # Pre-task steps, must setup working project directory if not already done.
         src = config["platforms"][platform]["template"]["project"]
         dest = os.path.join(config["work"], os.path.split(config["platforms"][platform]["template"]["project"])[-1])
@@ -240,12 +236,11 @@ if __name__ == "__main__":
             # Automagically download & setup dependencies
             os.chdir(app_data)
             if "dependencies" in config["platforms"][platform]:
-                for key, dep in config["platforms"][platform]["dependencies"].items():
-                    deps.append(key)
+                for dep in config["platforms"][platform]["dependencies"]:
+                    key = dep["name"]
                     version = ""
                     if "version" in dep:
                         version = dep["version"]
-                    dep_versions.append(version)
                     if not skip_deps:
                         # Shared library prioritised over building from source
                         if "shared" in dep:
@@ -337,18 +332,20 @@ if __name__ == "__main__":
             log("Excluded " + str(len(excluded_asset_files)) + " asset path(s).")
             
             # Include and library linking paths
-            for dep_index in range(len(deps)):
-                key = deps[dep_index]
-                v = dep_versions[dep_index]
+            dep_index = 0
+            for dep in config["platforms"][platform]["dependencies"]:
+                key = dep["name"]
+                v = dep["version"]
                 source_path = os.path.join(app_data, "source", key + ("-" + v if v else ""))
-                if "includes" in config["platforms"][platform]["dependencies"][key]:
-                    for i in range(len(config["platforms"][platform]["dependencies"][key]["includes"])):
-                        config["platforms"][platform]["dependencies"][key]["includes"][i] = os.path.join(source_path, config["platforms"][platform]["dependencies"][key]["includes"][i].format(version=v)).replace(os.sep, '/')
-                    include_paths = include_paths + config["platforms"][platform]["dependencies"][key]["includes"]
-                if "libs" in config["platforms"][platform]["dependencies"][key]:
-                    for i in range(len(config["platforms"][platform]["dependencies"][key]["libs"])):
-                        config["platforms"][platform]["dependencies"][key]["libs"][i] = os.path.join(source_path, config["platforms"][platform]["dependencies"][key]["libs"][i].format(version=v)).replace(os.sep, '/')
-                    lib_paths = lib_paths + config["platforms"][platform]["dependencies"][key]["libs"]
+                if "includes" in dep:
+                    for i in range(len(dep["includes"])):
+                        config["platforms"][platform]["dependencies"][dep_index]["includes"][i] = os.path.join(source_path, dep["includes"][i].format(version=v)).replace(os.sep, '/')
+                    include_paths = include_paths + dep["includes"]
+                if "libs" in dep:
+                    for i in range(len(dep["libs"])):
+                        config["platforms"][platform]["dependencies"][dep_index]["libs"][i] = os.path.join(source_path, dep["libs"][i].format(version=v)).replace(os.sep, '/')
+                    lib_paths = lib_paths + dep["libs"]
+                dep_index += 1
             
             os.chdir(dest)
             
@@ -451,11 +448,8 @@ if __name__ == "__main__":
             if not os.path.exists("shared"):
                 execute("mkdir \"shared\"")
             os.chdir("shared")
-            for key in deps:
-                version = ""
-                if "version" in config["platforms"][platform]["dependencies"][key]:
-                    version = config["platforms"][platform]["dependencies"][key]["version"]
-                dep_name = key + ("-" + version if version else "")
+            for dep in config["platforms"][platform]["dependencies"]:
+                dep_name = dep["name"] + ("-" + dep["version"] if "version" in dep else "")
                 dest_path = os.path.normpath(os.path.join(cwd, config["output"], platform, mode))
                 for root, dirs, files in os.walk(dep_name):
                     for file in files:
