@@ -16,7 +16,7 @@ For an example project using soupbuild, check out [plumbing_disaster](https://gi
 ## Build configuration file (.soup)
 The build configuration file defines how soupbuild will perform tasks for different platforms and modes.
 You can add custom platforms and modes (e.g. Debug or Release) which can then be customised to suit your needs.
-An example file is included in the root directory named `demo.soup`.
+An example is included in the root directory of [plumbing_disaster](https://github.com/SpectralCascade/plumbing_disaster) named `build.soup`.
 
 ## Option flags:
 - `--quiet` means only the task result and stdout from subprocesses are shown.
