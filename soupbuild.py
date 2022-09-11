@@ -44,6 +44,7 @@ def format_vars(data, config, mode, platform, root):
     data = data.replace("{root}", root)
     data = data.replace("{work}", config["work"])
     data = data.replace("{app_data}", app_data)
+    data = data.replace("{cpu_count}", str(os.cpu_count()))
     return data
 
 # Format the build configuration data with task level formatting
