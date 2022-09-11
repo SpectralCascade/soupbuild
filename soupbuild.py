@@ -87,7 +87,8 @@ def retrieve_archive(url, name, root=".", v="", force=False):
         execute("mkdir \"" + extracted + "\"")
     elif not force:
         log("Already downloaded version " + v + " of dependency " + name + " from " + url)
-        return True
+        os.chdir(extracted)
+        return extracted
     os.chdir(extracted)
     log("Attempting to download archive from URL " + url)
     try:
@@ -96,10 +97,16 @@ def retrieve_archive(url, name, root=".", v="", force=False):
         log("Download successful, extracting to \"" + extracted + "\"")
         execute("tar -x" + ("vz" if tarball else "") + "f archive" + ext)
         os.remove("archive" + ext)
+        # If there's only a single folder, move extracted files out of it
+        extracted_list = os.listdir(os.getcwd())
+        if len(extracted_list) == 1 and os.path.isdir(extracted_list[0]):
+            for item in os.listdir(extracted_list[0]):
+                execute("mv \"" + extracted_list[0] + "/" + item + "\" . -Force", ps=True)
+            os.rmdir(extracted_list[0])
     except Exception as e:
         log("ERROR: Failed to download and extract archive due to exception: " + str(e))
-        return False
-    return True
+        return ""
+    return extracted
 
 # Standard execution (in directory with a .soup file):
 # python3 soupbuild.py [platform] task [mode]
@@ -250,8 +257,13 @@ if __name__ == "__main__":
                             os.chdir(app_data)
                         if "source" in dep:
                             # Download and extract library source code if necessary
-                            if not retrieve_archive(dep["source"], key, "source", version):
+                            extract_dir = retrieve_archive(dep["source"], key, "source", version)
+                            if not extract_dir:
                                 sys.exit(-1)
+                            elif "build" in dep:
+                                # Build the library if necessary
+                                for build_step in dep["build"]:
+                                    execute(build_step, ps=True)
                             os.chdir(app_data)
             os.chdir(cwd)
             
@@ -443,17 +455,18 @@ if __name__ == "__main__":
                     else:
                         log("Warning: specified output path \"" + src_path + "\" does not exist, failed to copy.")
             
-            # Also be sure to copy shared libraries to the outputs directory
-            os.chdir(app_data)
-            if not os.path.exists("shared"):
-                execute("mkdir \"shared\"")
-            os.chdir("shared")
-            for dep in config["platforms"][platform]["dependencies"]:
-                dep_name = dep["name"] + ("-" + dep["version"] if "version" in dep else "")
-                dest_path = os.path.normpath(os.path.join(cwd, config["output"], platform, mode))
-                for root, dirs, files in os.walk(dep_name):
-                    for file in files:
-                        if not file.endswith(".txt"):
-                            execute("cp \"" + os.path.join(root, file) + "\" \"" + dest_path + "\"", ps=True)
+            if ("output_shared" in config["platforms"][platform]["tasks"][task] and config["platforms"][platform]["tasks"][task]["output_shared"]):
+                # Also be sure to copy shared libraries to the outputs directory
+                os.chdir(app_data)
+                if not os.path.exists("shared"):
+                    execute("mkdir \"shared\"")
+                os.chdir("shared")
+                for dep in config["platforms"][platform]["dependencies"]:
+                    dep_name = dep["name"] + ("-" + dep["version"] if "version" in dep else "")
+                    dest_path = os.path.normpath(os.path.join(cwd, config["output"], platform, mode))
+                    for root, dirs, files in os.walk(dep_name):
+                        for file in files:
+                            if not file.endswith(".txt"):
+                                execute("cp \"" + os.path.join(root, file) + "\" \"" + dest_path + "\"", ps=True)
         
         config = original_config.copy()
