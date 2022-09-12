@@ -264,6 +264,7 @@ if __name__ == "__main__":
                             elif "build" in dep:
                                 # Build the library if necessary
                                 for build_step in dep["build"]:
+                                    build_step = build_step.replace("{version}", version)
                                     execute(build_step, ps=True)
                             os.chdir(app_data)
             os.chdir(cwd)
