@@ -6,6 +6,8 @@ import re
 import time
 import json
 import shutil
+import http
+import datetime
 
 MAJOR_VERSION = 1
 MINOR_VERSION = 0
@@ -76,7 +78,7 @@ def handle_download(block_count, block_size, total_size):
     log("Downloaded " + str(block_size * block_count) + " / " + (str(total_size) if total_size >= 0 else "unknown total") + " bytes...")
 
 # Downloads an archive and extracts it to a folder
-def retrieve_archive(url, name, root=".", v="", force=False):
+def retrieve_archive(url, name, root=".", v="", force=False, info_url="", date_mod_keys=[]):
     if not os.path.exists(root):
         execute("mkdir \"" + root + "\"")
     os.chdir(root)
@@ -87,9 +89,63 @@ def retrieve_archive(url, name, root=".", v="", force=False):
     if not os.path.exists(extracted):
         execute("mkdir \"" + extracted + "\"")
     elif not force:
-        log("Already downloaded version " + v + " of dependency " + name + " from " + url)
-        os.chdir(extracted)
-        return extracted
+        changed = False
+        # If using latest version, check for changes and redownload if necessary
+        if v == "latest":
+            log("Checking dependency " + name + "-latest for updates...")
+            try:
+                check_url = url
+                if info_url and date_mod_keys:
+                    check_url = info_url
+                
+                # Make a GET request to the URL that provides the information we need
+                front, spliturl = check_url.split("://", 1)
+                address, url_path = spliturl.split("/", 1)
+                log("Connecting to " + address)
+                connection = http.client.HTTPSConnection(address) if check_url.startswith("https") else http.client.HTTPConnection(address)
+                log("GET to /" + url_path)
+                # GitHub always requires a User-Agent header, just use the dependency name
+                connection.request("GET", "/" + url_path, headers={"User-Agent": name})
+                response = connection.getresponse()
+                if info_url and date_mod_keys:
+                    # REST API available, get data from JSON
+                    json_data = str(response.read().decode("utf-8"))
+                    #log("Got data: \n" + json_data)
+                    info = json.loads(json_data)
+                    # Extract date modified (assumes ISO format)
+                    for key in date_mod_keys:
+                        info = info[key]
+                    # Datetime doesn't support the Z suffix in ISO strings
+                    date_modified = datetime.datetime.fromisoformat(info.strip("Z"))
+                    date_last_retrieved = datetime.datetime.utcfromtimestamp(os.path.getmtime(extracted))
+                    log("Remote dependency update time: " + date_modified.isoformat() + ", Local dependency last modified time: " + date_last_retrieved.isoformat())
+                    if (date_modified > date_last_retrieved):
+                        changed = True
+                else:
+                    # No REST API available, maybe the file itself has a last-modified header
+                    updated = response.getheader("last-modified")
+                    if updated != None:
+                        latest_update = datetime.strptime(updated, "%a, %d %b %Y %H:%M:%S %Z")
+                        if ((latest_update.datetime(1970, 1, 1)).total_seconds() > os.path.getmtime(extracted)):
+                            changed = True
+                        else:
+                            log("No new updates available for " + name + "-latest.")
+                    else:
+                        log("Unknown when the dependency was last updated.")
+                connection.close()
+            except Exception as error_e:
+                # Worst case, we just retrieve the latest every time
+                log("ERROR: " + str(error_e))
+                log("ERROR: Failed to retrieve dependency updates info, redownloading dependency...")
+                changed = True
+        if changed:
+            log("Dependency has changed since last retrieval, updating...")
+            shutil.rmtree(extracted)
+            execute("mkdir \"" + extracted + "\"")
+        else:
+            log("Already downloaded version " + v + " of dependency " + name + " from " + url)
+            os.chdir(extracted)
+            return extracted
     os.chdir(extracted)
     log("Attempting to download archive from URL " + url)
     try:
@@ -129,6 +185,7 @@ if __name__ == "__main__":
     task_only = "--task-only" in sys.argv
     init = "--init" in sys.argv
     skip_deps = "--skip-deps" in sys.argv
+    skip_steps = "--skip-steps" in sys.argv
     
     config = None
     while (argi < argc and sys.argv[argi].startswith("--")):
@@ -258,14 +315,24 @@ if __name__ == "__main__":
                             os.chdir(app_data)
                         if "source" in dep:
                             # Download and extract library source code if necessary
-                            extract_dir = retrieve_archive(dep["source"], key, "source", version)
+                            info_url = ""
+                            modified_date_keys = []
+                            if "source-info" in dep:
+                                info_url = dep["source-info"]["url"]
+                                modified_date_keys = dep["source-info"]["modified-date"]
+                            extract_dir = retrieve_archive(dep["source"], key, "source", version, False, info_url, modified_date_keys)
                             if not extract_dir:
                                 sys.exit(-1)
                             elif "build" in dep:
                                 # Build the library if necessary
+                                dep_run_dir = os.getcwd()
                                 for build_step in dep["build"]:
                                     build_step = build_step.replace("{version}", version)
+                                    soupbuild = "{soupbuild}" in build_step
+                                    if (soupbuild):
+                                        build_step = build_step.replace("{soupbuild}", "python3 \"" + script_path + "\" ")
                                     execute(build_step, ps=True)
+                                    os.chdir(dep_run_dir)
                             os.chdir(app_data)
             os.chdir(cwd)
             
@@ -279,19 +346,19 @@ if __name__ == "__main__":
             
             # Now link source code and assets - more efficient than copying.
             full_code_dest = config["platforms"][platform]["template"]["source"]
-            full_assets_dest = config["platforms"][platform]["template"]["assets"]
+            full_assets_dest = config["platforms"][platform]["template"]["assets"] if "assets" in config["platforms"][platform]["template"] else ""
             code_dest = os.path.join(dest, os.path.split(full_code_dest)[0])
-            assets_dest = os.path.join(dest, os.path.split(full_assets_dest)[0])
+            assets_dest = os.path.join(dest, os.path.split(full_assets_dest)[0]) if full_assets_dest else ""
             full_code_dest = os.path.join(dest, full_code_dest)
-            full_assets_dest = os.path.join(dest, full_assets_dest)
+            full_assets_dest = os.path.join(dest, full_assets_dest) if full_assets_dest else ""
             
             if (not os.path.exists(code_dest)):
                 execute("mkdir \"" + code_dest + "\"")
-            if (not os.path.exists(assets_dest)):
+            if (assets_dest and not os.path.exists(assets_dest)):
                 execute("mkdir \"" + assets_dest + "\"")
             if (not os.path.exists(full_code_dest)):
                 execute("mklink /J \"" + full_code_dest + "\" \"" + config["source"] + "\"")
-            if (not os.path.exists(full_assets_dest)):
+            if (full_assets_dest and not os.path.exists(full_assets_dest)):
                 execute("mklink /J \"" + full_assets_dest + "\" \"" + config["assets"] + "\"")
             
             # Next, grab lists of the source & asset file paths as well as dependency paths
@@ -305,7 +372,7 @@ if __name__ == "__main__":
             excluded_source_files = config["source-ignore"] if "source-ignore" in config else []
             if "source-ignore" in config["platforms"][platform]:
                 excluded_source_files = excluded_source_files + config["platforms"][platform]["source-ignore"]
-            excluded_source_files = [os.path.normpath(path) for path in excluded_source_files]
+            excluded_source_files = [os.path.normpath(config["source"] + "/" + path) for path in excluded_source_files]
 
             # Excluded asset file paths
             excluded_asset_files = config["assets-ignore"] if "assets-ignore" in config else []
@@ -314,11 +381,18 @@ if __name__ == "__main__":
             excluded_asset_files = [os.path.normpath(path) for path in excluded_asset_files]
             
             # Source and header files
+            excluded_source_count = 0
             for root, dirs, files in os.walk(config["source"]):
                 root = os.path.normpath(root)
-                dirs[:] = [dir for dir in dirs if os.path.join(root, dir) not in excluded_source_files]
+                excluded_dirs = len(dirs)
+                dirs[:] = [dir for dir in dirs if os.path.normpath(os.path.join(root, dir)) not in excluded_source_files]
+                excluded_dirs -= len(dirs)
+                excluded_source_count += excluded_dirs
                 for file in files:
-                    if (file in excluded_source_files):
+                    full_file_path = os.path.normpath(os.path.join(root, file))
+                    if (full_file_path in excluded_source_files):
+                        print("Excluding source: " + full_file_path)
+                        excluded_source_count += 1
                         continue
                     found_file = False
                     for ext in source_extensions:
@@ -333,17 +407,21 @@ if __name__ == "__main__":
                                 break
             
             # Asset files
-            for root, dirs, files in os.walk(config["assets"]):
-                root = os.path.normpath(root)
-                for file in files:
-                    if (file not in excluded_asset_files):
-                        asset_files.append(os.path.join(root, file))
+            excluded_asset_count = 0
+            if ("assets" in config):
+                for root, dirs, files in os.walk(config["assets"]):
+                    root = os.path.normpath(root)
+                    for file in files:
+                        if (file not in excluded_asset_files):
+                            asset_files.append(os.path.join(root, file))
+                        else:
+                            excluded_asset_count += 1
             
             log("Found " + str(len(source_files)) + " source file(s).")
             log("Found " + str(len(header_files)) + " header file(s).")
-            log("Excluded " + str(len(excluded_source_files)) + " source/header path(s).")
+            log("Excluded " + str(excluded_source_count) + " source/header path(s).")
             log("Found " + str(len(asset_files)) + " asset files.")
-            log("Excluded " + str(len(excluded_asset_files)) + " asset path(s).")
+            log("Excluded " + str(excluded_asset_count) + " asset path(s).")
             
             # Include and library linking paths
             dep_index = 0
@@ -410,7 +488,7 @@ if __name__ == "__main__":
         task_run_dir = os.getcwd()
         
         steps = config["platforms"][platform]["tasks"][task]["steps"]
-        num_steps = len(steps)
+        num_steps = len(steps) if not skip_steps else 0
         
         failed = False
         abort_on_error = config["platforms"][platform]["tasks"][task]["abort_on_error"] if "abort_on_error" in config["platforms"][platform]["tasks"][task] else True
@@ -420,6 +498,10 @@ if __name__ == "__main__":
             if (run_task):
                 os.chdir(cwd)
                 steps[i] = steps[i].replace("{run_task}", "python3 \"" + script_path + "\" --quiet --task-only \"--build-config=" + config_path + "\"")
+            soupbuild = "{soupbuild}" in steps[i]
+            if (soupbuild):
+                os.chdir(cwd)
+                steps[i] = steps[i].replace("{soupbuild}", "python3 \"" + script_path + "\" ")
             
             failed_step = False
             if (execute(steps[i], ps=(not run_task)) != 0):
