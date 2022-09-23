@@ -94,6 +94,6 @@ There are only a few parameters needed for configuring dependencies:
 
 `libs` - Mandatory - A list of relative paths from the root of the dependency archive/repository to the compiled library archive file(s). Note that if building from source, this is where any library archives will be output.
 
-`build` - Optional - A list of terminal/shell/command line commands to execute when building the dependency from source.
+`build` - Optional - A list of terminal/shell/command line commands to execute when building the dependency from source. If you're building a library from source, you can specify the steps to do so here.
 
-`clean` - Optional - A list of terminal/shell/command line commands to execute when cleaning the dependency files.
+`clean` - Optional - A list of terminal/shell/command line commands to execute when cleaning the dependency files. If you're building a library from source, you can specify the steps to clean up the dependency so it can be rebuilt from scratch.
