@@ -11,7 +11,7 @@ Requires Python version 3.8 or newer. Developed primarily for Windows but could 
 
 Running the script without any arguments runs the default task set in the build configuration file.
 
-For an example project using soupbuild, check out [plumbing_disaster](https://github.com/SpectralCascade/plumbing_disaster) which has a build file setup for building the app for Windows and Android.
+For an example project using soupbuild, check out [plumbing_disaster](https://github.com/SpectralCascade/plumbing_disaster) which has a build file setup for building the app for Windows and Android. I would highly recommend stepping through this example and referring to this README to better understand how Soupbuild works. But if you're just here to grab the script and build some existing Soupbuild-based projects, go ahead and just run the script on those to make some builds!
 
 ## Options:
 - `--build-config="path/to/config/file/example.soup"` provide a path to a specific build configuration file.
