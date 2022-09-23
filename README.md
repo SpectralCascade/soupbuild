@@ -98,6 +98,9 @@ There are only a few parameters needed for configuring dependencies:
 
 `clean` - Optional - A list of terminal/shell/command line commands to execute when cleaning the dependency files. If you're building a library from source, you can specify the steps to clean up the dependency so it can be rebuilt from scratch.
 
+### Platform Source-ignore
+
+
 ### Platform Template
 Templates enable you to give Soupbuild all the build system boilerplate you never want to touch again, such as native project files, generated Android studio files and anything else that makes you shudder to think about. How does it work? Well, you can create a folder hierarchy with these various build files in already; with some modifications to the files that enables Soupbuild to generate their content (such as absolute file paths to assets, source code and other stuff). Then, you can point Soupbuild towards your template folder hierarchy and files in the build configuration - that's where your platform template parameters come in.
 
@@ -109,6 +112,9 @@ Templates enable you to give Soupbuild all the build system boilerplate you neve
 
 `generate` - Mandatory - This object contains custom objects for generating data that will replace sections of the template project files you specify. For example, you could use the generate field to insert a formatted list of source file paths into a make file, or the global name of the project. This takes all the effort out of adding, removing and modifying source files from your C/C++ project in future and enables you to ditch absolute paths as they can be generated each build instead.
 
+#### Template Generate
+
+
 ### Platform Tasks
 Platform specific tasks are what drive Soupbuild. Here you may specify a number of command steps to execute in the terminal/shell/command line to carry out a build, clean the project, run some custom pre and post build scripts or do anything else you can imagine. You can specify a unique name as the key for each task configuration, e.g. "build".
 
@@ -119,3 +125,26 @@ Platform specific tasks are what drive Soupbuild. Here you may specify a number 
 `output_shared` - Optional - A boolean that when set to true (default false) will copy the shared library binaries for each dependency (where relevant) into the global output directory upon task completion.
 
 `abort_on_error` - Optional - A boolean that when set to false (default true) will cause the task to continue running in the event of an error, otherwise if set to true the task will stop when an error is encountered during one of the steps.
+
+### Formatter variables
+Certain configuration parameters may use so-called "formatter" variables, allowing you to insert some runtime defined values such as the project name, the number of logical CPU cores available to the machine, the current mode and so on. Not all of these formatters can be used everywhere, and some are dependent on scope (e.g. specifying the {name} formatter in a dependency URL will insert the name of the dependency, not the project).
+
+Formatters are also used in generating project files from the template (as per the platform generate configurations)
+
+`{name}` - The name of the project as defined by the global configuration parameters. When used in the scope of a platform dependency, instead the name of the dependency is used.
+
+`{version}` - Only available in platform dependency scope; this is the `version` of the dependency.
+
+`{output}` - Global `output` parameter, i.e. the path to which Soupbuild will output files upon completion of a task such as a build.
+
+`{mode}` - The mode specified when the Soupbuild is run. This will be one of the modes specified in the global `mode` configuration object.
+
+`{platform}` - The platform specified when the Soupbuild is run. This will be one of the platforms specified in the global `platforms` configuration object.
+
+`{root}` - The absolute path of the working directory in which the build configuration file is.
+
+`{work}` - Global `work` parameter, i.e. the directory where Soupbuild will work, generating files from the template and so on.
+
+`{app_data}` - The shared Soupbuild local app data directory. On Windows this is in `%localappdata%/Soupbuild`.
+
+`{cpu_count}` - The number of logical CPU cores available. This is useful when using the `-j` option with `make` builds, as it allows make to compile source files in parallel.
