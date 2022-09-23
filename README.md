@@ -97,3 +97,14 @@ There are only a few parameters needed for configuring dependencies:
 `build` - Optional - A list of terminal/shell/command line commands to execute when building the dependency from source. If you're building a library from source, you can specify the steps to do so here.
 
 `clean` - Optional - A list of terminal/shell/command line commands to execute when cleaning the dependency files. If you're building a library from source, you can specify the steps to clean up the dependency so it can be rebuilt from scratch.
+
+### Platform Template
+Templates enable you to give Soupbuild all the build system boilerplate you never want to touch again, such as native project files, generated Android studio files and anything else that makes you shudder to think about. How does it work? Well, you can create a folder hierarchy with these various build files in already; with some modifications to the files that enables Soupbuild to generate their content (such as absolute file paths to assets, source code and other stuff). Then, you can point Soupbuild towards your template folder hierarchy and files in the build configuration - that's where your platform template parameters come in.
+
+`project` - Mandatory - Relative path to the template folder/file hierarchy. Typically it's best to keep this accessible in your project repository so you can commit changes to the native build system.
+
+`source` - Mandatory - Relative path to your source code files within the template itself. Some build pipelines such as Android studio expect this to a specific place, such as "app/jni/src" while it may not matter so much for other build pipelines. Whatever you specify here will be created as a symbolic link in the file system to the "source" path specified in the global parameters during the build.
+
+`assets` - Optional - Like "source" field noted above, but for project assets such as images, audio files and so on. Once again, this may be important to some build pipelines such as Android studio but matter less in other build pipelines. Whatever you specify here will be created as a symbolic link in the file system to the "assets" path specified in the global parameters during the build.
+
+`generate` - Mandatory - This object contains custom objects for generating data that will replace sections of the template project files you specify. For example, you could use the generate field to insert a formatted list of source file paths into a make file, or the global name of the project. This takes all the effort out of adding, removing and modifying source files from your C/C++ project in future and enables you to ditch absolute paths as they can be generated each build instead.
