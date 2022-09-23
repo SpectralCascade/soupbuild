@@ -37,9 +37,9 @@ At the topmost level, there are a number of global parameters for your project. 
 
 `work` - Mandatory - Relative path for Soupbuild to carry out filesystem work when in use.
 
-`source-ext` - Optional - List of file extensions for C and C++ source files, typically `.c` and `.cpp`.
+`source-ext` - Optional - List of file extensions for C and C++ source files, by default `.c` and `.cpp`.
 
-`header-ext` - Optional - List of file extensions for C and C++ header files, typically `.h`.
+`header-ext` - Optional - List of file extensions for C and C++ header files, by default `.h`.
 
 `source-ignore` - Optional - List of paths that should be ignored by Soupbuild when locating source code. This is useful if you support multiple platforms.
 
