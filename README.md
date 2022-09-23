@@ -18,7 +18,9 @@ The build configuration file defines how soupbuild will perform tasks for differ
 You can add custom platforms and modes (e.g. Debug or Release) which can then be customised to suit your needs.
 An example is included in the root directory of [plumbing_disaster](https://github.com/SpectralCascade/plumbing_disaster) named `build.soup`.
 
-## Option flags:
-- `--quiet` means only the task result and stdout from subprocesses are shown.
-- `--task-only` means that the task is run without any pre-task setup processes.
+## Options:
+- `--build-config="path/to/config/file/example.soup"` provide a path to a specific build configuration file.
 - `--init` reinitialises the work directory.
+- `--quiet` means only the task result and stdout from subprocesses are shown.
+- `--skip-deps` skips the dependency retrieval and setup processes.
+- `--task-only` means that the task is run without any pre or post-task processes.
