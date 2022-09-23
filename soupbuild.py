@@ -398,6 +398,9 @@ if __name__ == "__main__":
             output_dir = os.path.join(config["output"], platform, mode)
             if (not os.path.exists(output_dir)):
                 execute("mkdir \"" + output_dir + "\"")
+            
+            # Make sure work directory exists and is setup
+            if (not os.path.exists(dest)):
                 execute("cp -R -Force \"" + src + "\" \"" + dest + "\"", ps=True)
             else:
                 execute("cp -R -Force \"" + src + "\" \"" + os.path.split(dest)[0] + "\"", ps=True)
@@ -542,6 +545,7 @@ if __name__ == "__main__":
             os.chdir(cwd)
         
         # Execute the task steps in the working project directory
+        os.chdir(cwd)
         os.chdir(dest)
         task_run_dir = os.getcwd()
         
@@ -568,6 +572,9 @@ if __name__ == "__main__":
             clean = "{clean}" in steps[i]
             if (clean):
                 os.chdir(cwd)
+                output_rm = config["output"] + "/" + platform
+                if (os.path.exists(output_rm)):
+                    shutil.rmtree(output_rm)
                 
                 work_rm = config["work"] + "/" + platform + "/obj"
                 if (os.path.exists(work_rm)):
