@@ -56,5 +56,23 @@ At the topmost level, there are a number of global parameters for your project. 
 ### Modes
 Modes are useful when building variants of a program, such as a build with or without debug symbols. These modes mostly affect the native build systems Soupbuild uses, as you configure them to differ according to the mode used.
 
-The `modes` field is a JSON object with custom mode objects specified as key-value pairs. At present the value objects have no significance or use, but the keys can  be used in a variety of situations such as when generating files from templates. Consider the mode used when running Soupbuild to be a variable, and those keys as the possible values. Typically you'll have debug and release modes, with the release mode build stripped of debugging symbols, as is standard practice with most C and C++ projects.
+The `modes` field is a JSON object with custom mode objects specified as key-value pairs. At present the value objects have no significance or use, but the keys can  be used in a variety of situations such as when generating files from templates. Consider the mode used when running Soupbuild to be a variable, and those keys as the possible values. Typically you'll have debug and release modes, with the release mode build stripped of debugging symbols, as is standard practice with most C and C++ projects. But how you use modes is entirely up to you and how you implement them with your build system.
 
+Soupbuild always requires at least one mode to be specified.
+
+### Platforms
+Platforms are at the heart of Soupbuild. Here, you can add custom platform-specific configurations for dependencies, project files and tasks. This allows you to port a project to any platform you want, while using the same Soupbuild interface to build them. Extremely flexible but provide a great deal of abstraction when dealing with all the gubbins of a typical C++ project.
+
+Individual platforms can be specified with custom names as keys - for example, you might have "Windows" platform and "Android" platform configurations. Or you might call them something else entirely, like "PC" and "Mobile". It's up to you to decide what platforms you want to support and how to manage their respective build systems within Soupbuild. You could even use platforms as variations of the same program; for instance, you might have a platform variation that excludes some source files while including others.
+
+Soupbuild always requires at least one platform to be specified.
+
+Each platform has a number of configuration objects to be specified. These include the following:
+
+`dependencies` - Optional - A list of objects specifying details about a particular project dependency, such as a shared or static library.
+
+`source-ignore` - Optional - Platform specific list of paths to ignore when Soupbuild is locating source code files (including headers).
+
+`template` - Mandatory - An object for configuring the platform's native build system project files, such as an Android studio project folder or some make files.
+
+`tasks` - Mandatory - An object containing terminal/shell/command line task configurations. There must always be at least one task per platform.
