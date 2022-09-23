@@ -79,18 +79,64 @@ def handle_download(block_count, block_size, total_size):
 
 # Downloads an archive and extracts it to a folder
 def retrieve_archive(url, name, root=".", v="", force=False, info_url="", date_mod_keys=[]):
+    rebuild = False
     if not os.path.exists(root):
         execute("mkdir \"" + root + "\"")
     os.chdir(root)
     url = url.format(version=v)
     tarball = url.endswith(".tar.gz")
+    git = url.endswith(".git")
     ext = (".tar.gz" if tarball else ".zip")
     extracted = name + ("-" + v if v else "")
+    git_commit = v.split("-") if v else ["latest"]
+    branch = git_commit[1] if len(git_commit) > 1 else ""
     if not os.path.exists(extracted):
-        execute("mkdir \"" + extracted + "\"")
+        rebuild = True
+        if git:
+            execute("git clone " + url + " \"" + extracted + "\"")
+            if branch:
+                execute("git checkout " + branch)
+            if not (git_commit[0] == "latest"):
+                execute("git checkout " + git_commit[0])
+        else:
+            execute("mkdir \"" + extracted + "\"")
     elif not force:
-        changed = False
-        # If using latest version, check for changes and redownload if necessary
+        if git:
+            os.chdir(extracted)
+            # Only git pull latest when there are no changes to the repo locally and the current branch name matches (when given)
+            git_output_path = "../temp-git-status.txt"
+            if git_commit[0] == "latest":
+                # Fetch first in case there have been updates
+                execute("git fetch")
+                execute("git status > " + git_output_path)
+                try:
+                    with open(git_output_path, "r") as f:
+                        git_status = f.read()
+                        print(git_status)
+                        if "nothing to commit, working tree clean" in git_status:
+                            if not branch or ("On branch " + branch) in git_status:
+                                if "Your branch is up to date" not in git_status:
+                                    # No local changes but there are remote changes, go ahead and pull
+                                    rebuild = True
+                                    execute("git pull")
+                                else:
+                                    log("No remote updates to git repo for dependency \"" + name + "\" detected.")
+                            else:
+                                # In a different branch, don't pull latest
+                                log("Checked out to different branch than \"" + branch + "\", not pulling latest.")
+                                rebuild = True
+                        else:
+                            # Local changes detected, don't pull latest
+                            log("Local changes detected in git repo for dependency " + name + ", not pulling latest.")
+                            rebuild = True
+                    # Clean up after use
+                    os.remove(git_output_path)
+                except Exception as git_error_e:
+                    log("ERROR: Cannot check local git repository for changes. Exception: " + git_error_e)
+                    rebuild = True
+            return extracted, rebuild
+        
+        # If using latest version of an archive, check for changes and redownload if necessary
         if v == "latest":
             log("Checking dependency " + name + "-latest for updates...")
             try:
@@ -120,14 +166,14 @@ def retrieve_archive(url, name, root=".", v="", force=False, info_url="", date_m
                     date_last_retrieved = datetime.datetime.utcfromtimestamp(os.path.getmtime(extracted))
                     log("Remote dependency update time: " + date_modified.isoformat() + ", Local dependency last modified time: " + date_last_retrieved.isoformat())
                     if (date_modified > date_last_retrieved):
-                        changed = True
+                        rebuild = True
                 else:
                     # No REST API available, maybe the file itself has a last-modified header
                     updated = response.getheader("last-modified")
                     if updated != None:
                         latest_update = datetime.strptime(updated, "%a, %d %b %Y %H:%M:%S %Z")
                         if ((latest_update.datetime(1970, 1, 1)).total_seconds() > os.path.getmtime(extracted)):
-                            changed = True
+                            rebuild = True
                         else:
                             log("No new updates available for " + name + "-latest.")
                     else:
@@ -137,15 +183,15 @@ def retrieve_archive(url, name, root=".", v="", force=False, info_url="", date_m
                 # Worst case, we just retrieve the latest every time
                 log("ERROR: " + str(error_e))
                 log("ERROR: Failed to retrieve dependency updates info, redownloading dependency...")
-                changed = True
-        if changed:
+                rebuild = True
+        if rebuild:
             log("Dependency has changed since last retrieval, updating...")
             shutil.rmtree(extracted)
             execute("mkdir \"" + extracted + "\"")
         else:
             log("Already downloaded version " + v + " of dependency " + name + " from " + url)
             os.chdir(extracted)
-            return extracted
+            return extracted, rebuild
     os.chdir(extracted)
     log("Attempting to download archive from URL " + url)
     try:
@@ -162,8 +208,8 @@ def retrieve_archive(url, name, root=".", v="", force=False, info_url="", date_m
             os.rmdir(extracted_list[0])
     except Exception as e:
         log("ERROR: Failed to download and extract archive due to exception: " + str(e))
-        return ""
-    return extracted
+        return "", False
+    return extracted, rebuild
 
 # Standard execution (in directory with a .soup file):
 # python3 soupbuild.py [platform] task [mode]
@@ -188,12 +234,14 @@ if __name__ == "__main__":
     skip_steps = "--skip-steps" in sys.argv
     
     config = None
+    
     while (argi < argc and sys.argv[argi].startswith("--")):
         if (sys.argv[argi].startswith("--build-config=")):
             file = sys.argv[argi][15:]
             with open(file, 'r') as data:
                 config = json.loads(data.read())
                 config_path = os.path.abspath(file)
+                cwd = os.path.dirname(config_path)
         argi += 1
     
     # Show program version
@@ -296,44 +344,54 @@ if __name__ == "__main__":
         
         # Pre-task steps, must setup working project directory if not already done.
         src = config["platforms"][platform]["template"]["project"]
-        dest = os.path.join(config["work"], os.path.split(config["platforms"][platform]["template"]["project"])[-1])
+        dest = os.path.normpath(os.path.join(config["work"], os.path.split(config["platforms"][platform]["template"]["project"])[-1]))
         if (not task_only):
             # Automagically download & setup dependencies
             os.chdir(app_data)
-            if "dependencies" in config["platforms"][platform]:
+            if not skip_deps and "dependencies" in config["platforms"][platform]:
                 for dep in config["platforms"][platform]["dependencies"]:
                     key = dep["name"]
                     version = ""
                     if "version" in dep:
                         version = dep["version"]
-                    if not skip_deps:
-                        # Shared library prioritised over building from source
-                        if "shared" in dep:
-                            # Download and extract shared library if necessary
-                            if not retrieve_archive(dep["shared"], key, "shared", version):
-                                sys.exit(-1)
-                            os.chdir(app_data)
-                        if "source" in dep:
-                            # Download and extract library source code if necessary
-                            info_url = ""
-                            modified_date_keys = []
-                            if "source-info" in dep:
-                                info_url = dep["source-info"]["url"]
-                                modified_date_keys = dep["source-info"]["modified-date"]
-                            extract_dir = retrieve_archive(dep["source"], key, "source", version, False, info_url, modified_date_keys)
-                            if not extract_dir:
-                                sys.exit(-1)
-                            elif "build" in dep:
-                                # Build the library if necessary
-                                dep_run_dir = os.getcwd()
-                                for build_step in dep["build"]:
-                                    build_step = build_step.replace("{version}", version)
-                                    soupbuild = "{soupbuild}" in build_step
-                                    if (soupbuild):
-                                        build_step = build_step.replace("{soupbuild}", "python3 \"" + script_path + "\" ")
-                                    execute(build_step, ps=True)
-                                    os.chdir(dep_run_dir)
-                            os.chdir(app_data)
+                    # Shared library prioritised over building from source
+                    if "shared" in dep:
+                        # Download and extract shared library if necessary
+                        dep_path, rebuild = retrieve_archive(dep["shared"], key, "shared", version)
+                        if not dep_path:
+                            sys.exit(-1)
+                        os.chdir(app_data)
+                    if "source" in dep:
+                        # Download and extract library source code if necessary
+                        info_url = ""
+                        modified_date_keys = []
+                        if "source-info" in dep:
+                            info_url = dep["source-info"]["url"]
+                            modified_date_keys = dep["source-info"]["modified-date"]
+
+                        extract_dir, do_build = retrieve_archive(dep["source"], key, "source", version, False, info_url, modified_date_keys)
+                        if not extract_dir:
+                            sys.exit(-1)
+                        
+                        # Check that some output libs exist; if not, will attempt to build the dependency
+                        has_libs = not dep["libs"]
+                        for lib_path in dep["libs"]:
+                            has_libs = has_libs or (os.path.exists(lib_path) and len(os.listdir(lib_path)) > 0)
+                            if has_libs:
+                                break
+                        do_build = do_build or not has_libs
+                        if "build" in dep and do_build:
+                            # Build the library if necessary
+                            log("Potential changes to dependency \"" + dep["name"] + "\" detected, building...")
+                            dep_run_dir = os.getcwd()
+                            for build_step in dep["build"]:
+                                build_step = build_step.replace("{version}", version)
+                                soupbuild = "{soupbuild}" in build_step
+                                if (soupbuild):
+                                    build_step = build_step.replace("{soupbuild}", "python3 \"" + script_path + "\" ")
+                                execute(build_step, ps=True)
+                                os.chdir(dep_run_dir)
+                        os.chdir(app_data)
             os.chdir(cwd)
             
             # Make sure output directory exists
@@ -494,14 +552,57 @@ if __name__ == "__main__":
         abort_on_error = config["platforms"][platform]["tasks"][task]["abort_on_error"] if "abort_on_error" in config["platforms"][platform]["tasks"][task] else True
         for i in range(num_steps):
             log("Task \"" + task + "\" step " + str(i + 1) + " of " + str(num_steps))
+
+            # Run another task in the config file
             run_task = "{run_task}" in steps[i]
             if (run_task):
                 os.chdir(cwd)
                 steps[i] = steps[i].replace("{run_task}", "python3 \"" + script_path + "\" --quiet --task-only \"--build-config=" + config_path + "\"")
+
+            # Run another soupbuild instance
             soupbuild = "{soupbuild}" in steps[i]
             if (soupbuild):
                 os.chdir(cwd)
                 steps[i] = steps[i].replace("{soupbuild}", "python3 \"" + script_path + "\" ")
+            
+            clean = "{clean}" in steps[i]
+            if (clean):
+                os.chdir(cwd)
+                
+                work_rm = config["work"] + "/" + platform + "/obj"
+                if (os.path.exists(work_rm)):
+                    shutil.rmtree(work_rm)
+                
+                os.chdir(task_run_dir)
+                continue
+
+            # Clean all dependencies that are built from source
+            clean_deps = "{clean_deps}" in steps[i]
+            if (clean_deps):
+                os.chdir(cwd)
+                for dep in config["platforms"][platform]["dependencies"]:
+                    if "clean" in dep or ("source" in dep and "build" in dep and not "shared" in dep):
+                        print ("Cleaning dependency " + dep["name"])
+                        os.chdir(os.path.join(app_data, "source"))
+                        os.chdir(dep["name"] + ("-" + dep["version"] if dep["version"] else ""))
+                        original_dir = os.getcwd()
+                        
+                        if "clean" in dep:
+                            # Config has a specific cleaning process for the dependency
+                            for clean_step_index in range(len(dep["clean"])):
+                                clean_step = dep["clean"][clean_step_index]
+                                clean_step = clean_step.replace("{soupbuild}", "python3 \"" + script_path + "\" ")
+                                clean_step = clean_step.replace("{run_task}", "python3 \"" + script_path + "\" --quiet --task-only \"--build-config=" + os.path.normpath(os.path.join(original_dir, config_path)) + "\"")
+                                log("Executing clean step " + str(clean_step_index + 1) + " of " + str(len(dep["clean"])) + " in " + os.getcwd())
+                                execute(clean_step)
+                        else:
+                            # Dumb cleaning attempt - only removes the output files, not the object files
+                            for lib_dir in dep["libs"]:
+                                if os.path.exists(lib_dir):
+                                    shutil.rmtree(lib_dir)
+                                execute("mkdir \"" + lib_dir + "\"")
+                os.chdir(task_run_dir)
+                continue
             
             failed_step = False
             if (execute(steps[i], ps=(not run_task)) != 0):
