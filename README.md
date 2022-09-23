@@ -108,3 +108,14 @@ Templates enable you to give Soupbuild all the build system boilerplate you neve
 `assets` - Optional - Like "source" field noted above, but for project assets such as images, audio files and so on. Once again, this may be important to some build pipelines such as Android studio but matter less in other build pipelines. Whatever you specify here will be created as a symbolic link in the file system to the "assets" path specified in the global parameters during the build.
 
 `generate` - Mandatory - This object contains custom objects for generating data that will replace sections of the template project files you specify. For example, you could use the generate field to insert a formatted list of source file paths into a make file, or the global name of the project. This takes all the effort out of adding, removing and modifying source files from your C/C++ project in future and enables you to ditch absolute paths as they can be generated each build instead.
+
+### Platform Tasks
+Platform specific tasks are what drive Soupbuild. Here you may specify a number of command steps to execute in the terminal/shell/command line to carry out a build, clean the project, run some custom pre and post build scripts or do anything else you can imagine. You can specify a unique name as the key for each task configuration, e.g. "build".
+
+`steps` - Mandatory - A list of commands that are executed sequentially in the terminal/shell/command line when the task is run.
+
+`outputs` - Optional - A list of paths to files or directories that should be copied into the global "output" directory upon task completion. For instance, if your build generates an executable file you can list the path to the file.
+
+`output_shared` - Optional - A boolean that when set to true (default false) will copy the shared library binaries for each dependency (where relevant) into the global output directory upon task completion.
+
+`abort_on_error` - Optional - A boolean that when set to false (default true) will cause the task to continue running in the event of an error, otherwise if set to true the task will stop when an error is encountered during one of the steps.
