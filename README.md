@@ -129,11 +129,12 @@ Platform specific tasks are what drive Soupbuild. Here you may specify a number 
 ### Formatter variables
 Certain configuration parameters may use so-called "formatter" variables, allowing you to insert some runtime defined values such as the project name, the number of logical CPU cores available to the machine, the current mode and so on. Not all of these formatters can be used everywhere, and some are dependent on scope (e.g. specifying the {name} formatter in a dependency URL will insert the name of the dependency, not the project).
 
-Formatters are also used in generating project files from the template (as per the platform generate configurations)
+Formatters are also used in generating project files, but ONLY user specified variables from the template "generate" configuration.
+
+#### Globally accessible formatters
+These formatters are available anywhere in the build configuration file. Just don't use them in their original defining field or things might break. Or as they say in the C and C++ standards... it can result in "undefined" behaviour. You've been warned!
 
 `{name}` - The name of the project as defined by the global configuration parameters. When used in the scope of a platform dependency, instead the name of the dependency is used.
-
-`{version}` - Only available in platform dependency scope; this is the `version` of the dependency.
 
 `{output}` - Global `output` parameter, i.e. the path to which Soupbuild will output files upon completion of a task such as a build.
 
@@ -148,3 +149,23 @@ Formatters are also used in generating project files from the template (as per t
 `{app_data}` - The shared Soupbuild local app data directory. On Windows this is in `%localappdata%/Soupbuild`.
 
 `{cpu_count}` - The number of logical CPU cores available. This is useful when using the `-j` option with `make` builds, as it allows make to compile source files in parallel.
+
+#### Template generate configuration formatters
+
+`{all_source_files}` - A formatted list of every file found in the globally specified `source` directory with extensions from the globally specified `source-ext` list. This list is formatted according to `all_source_files_format` in a template `generate` configuration and may only be used in the `value` field of template `generate` configurations.
+
+`{all_header_files}` - A formatted list of every file found in the globally specified `source` directory with extensions from the globally specified `header-ext` list. This list is formatted according to `all_header_files_format` in a template `generate` configuration and may only be used in the `value` field of template `generate` configurations.
+
+`{source_file}` - Used solely in the `all_source_files_format` template `generate` configuration field. Allows formatting with other characters surrounding a source file path, which is then used to generate the list of source files for `{all_source_files}`.
+
+`{header_file}` - Used solely in the `all_header_files_format` template `generate` configuration field. Allows formatting with other characters surrounding a header file path, which is then used to generate the list of header files for `{all_header_files}`.
+
+#### Task formatters
+
+`{clean}` - Used as a task step that cleans the project.
+
+`{clean_deps}` - Used as a task step that cleans all project dependencies.
+
+`{run_task}` - Used as a task step to run another task in the same configuration file. Does the same as running `python3 soupbuild.py --quiet --task-only "--build-config=path/to/this/file.soup"`.
+
+`{soupbuild}` - Run the Soupbuild script, you need to specify any options or parameters as normal. Same as running `python3 soupbuild.py`.
