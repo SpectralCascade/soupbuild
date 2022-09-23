@@ -76,3 +76,24 @@ Each platform has a number of configuration objects to be specified. These inclu
 `template` - Mandatory - An object for configuring the platform's native build system project files, such as an Android studio project folder or some make files.
 
 `tasks` - Mandatory - An object containing terminal/shell/command line task configurations. There must always be at least one task per platform.
+
+### Platform Dependencies
+Each platform may have a list of dependencies upon which your project relies. Most commonly these will be code libraries and APIs. When configured correctly, Soupbuild can take care of your dependencies automagically - from downloading source code, to building the dependency or copying shared libraries over to your project's output directory after building.
+
+There are only a few parameters needed for configuring dependencies:
+
+`name` - Mandatory - Specifies the unique name of the dependency. This name will be used in directory paths for the dependency and will appear in Soupbuild's standard output for identification purposes. It doesn't really matter what you call your dependencies, as long as you can identify them.
+
+`version` - Mandatory - Specifies the particular version of the dependency to be used. This could be a (string) version number, a git commit SHA or simply the date you added or modified the dependency. Again, in general you can call this whatever you like - with the exception of any string starting with the keyword `latest`. This keyword indicates that Soupbuild should always try to obtain the latest version of the dependency, whether that's the latest commit of a git repo or an updated zip archive file. When used with git repositories, you can add a hyphen `-` followed by a particular branch name or commit SHA to specify a specific branch or commit to use.
+
+`source` - Optional - Specifies the URL of a dependency's git repository, source code or development library archive. Soupbuild will use this URL to automagically download the dependency as necessary. You may use formatters in this field such as the dependency name and version.
+
+`shared` - Optional - Specifies the URL of a dependency's prebuilt shared binaries (such as `.so` or `.dll` files). This must be a `.zip` or `.tar.gz` archive file.
+
+`includes` - Mandatory - A list of relative paths from the root of the dependency archive/repository to the header include file(s).
+
+`libs` - Mandatory - A list of relative paths from the root of the dependency archive/repository to the compiled library archive file(s). Note that if building from source, this is where any library archives will be output.
+
+`build` - Optional - A list of terminal/shell/command line commands to execute when building the dependency from source.
+
+`clean` - Optional - A list of terminal/shell/command line commands to execute when cleaning the dependency files.
