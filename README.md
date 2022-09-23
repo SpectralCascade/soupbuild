@@ -23,4 +23,5 @@ An example is included in the root directory of [plumbing_disaster](https://gith
 - `--init` reinitialises the work directory.
 - `--quiet` means only the task result and stdout from subprocesses are shown.
 - `--skip-deps` skips the dependency retrieval and setup processes.
+- `--skip-steps` skips all task steps
 - `--task-only` means that the task is run without any pre or post-task processes.
