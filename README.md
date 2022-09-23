@@ -54,14 +54,14 @@ At the topmost level, there are a number of global parameters for your project. 
 `default-task` - Optional - Specify which task should be used by default.
 
 ### Modes
-Modes are useful when building variants of a program, such as a build with or without debug symbols. These modes mostly affect the native build systems Soupbuild uses, as you configure them to differ according to the mode used.
+`mode` Modes are useful when building variants of a program, such as a build with or without debug symbols. These modes mostly affect the native build systems Soupbuild uses, as you configure them to differ according to the mode used.
 
 The `modes` field is a JSON object with custom mode objects specified as key-value pairs. At present the value objects have no significance or use, but the keys can  be used in a variety of situations such as when generating files from templates. Consider the mode used when running Soupbuild to be a variable, and those keys as the possible values. Typically you'll have debug and release modes, with the release mode build stripped of debugging symbols, as is standard practice with most C and C++ projects. But how you use modes is entirely up to you and how you implement them with your build system.
 
 Soupbuild always requires at least one mode to be specified.
 
 ### Platforms
-Platforms are at the heart of Soupbuild. Here, you can add custom platform-specific configurations for dependencies, project files and tasks. This allows you to port a project to any platform you want, while using the same Soupbuild interface to build them. Extremely flexible but provide a great deal of abstraction when dealing with all the gubbins of a typical C++ project.
+`platform` Platforms are at the heart of Soupbuild. Here, you can add custom platform-specific configurations for dependencies, project files and tasks. This allows you to port a project to any platform you want, while using the same Soupbuild interface to build them. Extremely flexible but provide a great deal of abstraction when dealing with all the gubbins of a typical C++ project.
 
 Individual platforms can be specified with custom names as keys - for example, you might have "Windows" platform and "Android" platform configurations. Or you might call them something else entirely, like "PC" and "Mobile". It's up to you to decide what platforms you want to support and how to manage their respective build systems within Soupbuild. You could even use platforms as variations of the same program; for instance, you might have a platform variation that excludes some source files while including others.
 
@@ -78,7 +78,7 @@ Each platform has a number of configuration objects to be specified. These inclu
 `tasks` - Mandatory - An object containing terminal/shell/command line task configurations. There must always be at least one task per platform.
 
 ### Platform Dependencies
-Each platform may have a list of dependencies upon which your project relies. Most commonly these will be code libraries and APIs. When configured correctly, Soupbuild can take care of your dependencies automagically - from downloading source code, to building the dependency or copying shared libraries over to your project's output directory after building.
+`dependencies` Each platform may have a list of dependencies upon which your project relies. Most commonly these will be code libraries and APIs. When configured correctly, Soupbuild can take care of your dependencies automagically - from downloading source code, to building the dependency or copying shared libraries over to your project's output directory after building.
 
 There are only a few parameters needed for configuring dependencies:
 
@@ -99,10 +99,10 @@ There are only a few parameters needed for configuring dependencies:
 `clean` - Optional - A list of terminal/shell/command line commands to execute when cleaning the dependency files. If you're building a library from source, you can specify the steps to clean up the dependency so it can be rebuilt from scratch.
 
 ### Platform Source-ignore
-
+`source-ignore` A list of source and/or header files to be ignored for the specific platform. Completely optional.
 
 ### Platform Template
-Templates enable you to give Soupbuild all the build system boilerplate you never want to touch again, such as native project files, generated Android studio files and anything else that makes you shudder to think about. How does it work? Well, you can create a folder hierarchy with these various build files in already; with some modifications to the files that enables Soupbuild to generate their content (such as absolute file paths to assets, source code and other stuff). Then, you can point Soupbuild towards your template folder hierarchy and files in the build configuration - that's where your platform template parameters come in.
+`template` Templates enable you to give Soupbuild all the build system boilerplate you never want to touch again, such as native project files, generated Android studio files and anything else that makes you shudder to think about. How does it work? Well, you can create a folder hierarchy with these various build files in already; with some modifications to the files that enables Soupbuild to generate their content (such as absolute file paths to assets, source code and other stuff). Then, you can point Soupbuild towards your template folder hierarchy and files in the build configuration - that's where your platform template parameters come in.
 
 `project` - Mandatory - Relative path to the template folder/file hierarchy. Typically it's best to keep this accessible in your project repository so you can commit changes to the native build system.
 
@@ -113,10 +113,18 @@ Templates enable you to give Soupbuild all the build system boilerplate you neve
 `generate` - Mandatory - This object contains custom objects for generating data that will replace sections of the template project files you specify. For example, you could use the generate field to insert a formatted list of source file paths into a make file, or the global name of the project. This takes all the effort out of adding, removing and modifying source files from your C/C++ project in future and enables you to ditch absolute paths as they can be generated each build instead.
 
 #### Template Generate
+`generate` Templates aren't just for building system-agnostic project file structures, but the files in templates can also have some content generated automagically using template `generate` configurations. You can specify any custom variable here that can be inserted into a template file surrounded by curly braces. E.g. a variable configuration with the key "soup_app_name" could be inserted into a template file as {soup_app_name} and then Soupbuild will automagically insert the value of the configuration variable at runtime.
 
+`paths` - Mandatory - A list of paths to files (relative to the `project` template directory) which should be modified with the configuration.
+
+`value` - Mandatory - The string value to be inserted as the variable value. This can be any combination of formatter variables such as `{mode}` or simply a hardcoded string.
+
+`separator` - Optional - The string to use as a separator for list-type formatter variables such as `{all_header_files}`. E.g. you could use a comma and a newline ",\n" to separate each `{item}` in a list.
+
+`formatter` - Optional - The string to insert for each item of a list-type formatter variable such as `{all_header_files}`. E.g. you could wrap each `{item}` in a list with quotes.
 
 ### Platform Tasks
-Platform specific tasks are what drive Soupbuild. Here you may specify a number of command steps to execute in the terminal/shell/command line to carry out a build, clean the project, run some custom pre and post build scripts or do anything else you can imagine. You can specify a unique name as the key for each task configuration, e.g. "build".
+`tasks` Platform specific tasks are what drive Soupbuild. Here you may specify a number of command steps to execute in the terminal/shell/command line to carry out a build, clean the project, run some custom pre and post build scripts or do anything else you can imagine. You can specify a unique name as the key for each task configuration, e.g. "build".
 
 `steps` - Mandatory - A list of commands that are executed sequentially in the terminal/shell/command line when the task is run.
 
@@ -159,6 +167,8 @@ These formatters are available anywhere in the build configuration file. Just do
 `{source_file}` - Used solely in the `all_source_files_format` template `generate` configuration field. Allows formatting with other characters surrounding a source file path, which is then used to generate the list of source files for `{all_source_files}`.
 
 `{header_file}` - Used solely in the `all_header_files_format` template `generate` configuration field. Allows formatting with other characters surrounding a header file path, which is then used to generate the list of header files for `{all_header_files}`.
+
+`{item}` - Used solely to specify an individual item for list-type formatters such as `{all_header_files}` in the `formatter` field of a `generate` configuration.
 
 #### Task formatters
 
